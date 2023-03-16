@@ -1,0 +1,7 @@
+datasets
+hunspell
+nltk
+optuna
+pandas
+scikit-learn
+tqdm
