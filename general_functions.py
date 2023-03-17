@@ -3,15 +3,15 @@ from sklearn.svm import LinearSVC
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import fbeta_score, precision_score, recall_score
+from sklearn.exceptions import ConvergenceWarning
 
+import optuna
 import pandas as pd
 import numpy as np
 import hunspell  # libhunspell-dev
 from nltk.tokenize import RegexpTokenizer
 import tqdm
-
-import itertools
+import warnings
 import pdb
 
 def lemmatize(texts, dic_path):
@@ -31,9 +31,12 @@ def lemmatize(texts, dic_path):
 
   return stem_col
 
-def oversample(ds, target_f=np.average):
-    
-    class_counts = np.sum(ds.y, axis=0)
+def oversample(X, y, ids=None, target_f=np.average):
+
+    if ids is None:
+        ids = list(range(len(y)))
+        
+    class_counts = np.sum(y, axis=0)
     class_avg = target_f(class_counts)
 
     rates_per_class = np.copy(class_counts).astype(float)
@@ -41,16 +44,20 @@ def oversample(ds, target_f=np.average):
     rates_per_class[(rates_per_class > 0) & (rates_per_class < 1.0)] = 1.0
     rates_per_class = rates_per_class.round().astype(int)
 
-    rates_per_example = np.max(np.where(ds.y == 1, rates_per_class, 0), axis=1)
-    y_oversampled = np.repeat(ds.y, rates_per_example, axis=0)
-    X_oversampled = np.repeat(ds.X, rates_per_example, axis=0)
-    ids_oversampled = np.repeat(ds.ids, rates_per_example, axis=0)
+    rates_per_example = np.max(np.where(y == 1, rates_per_class, 0), axis=1)
+    y_oversampled = np.repeat(y, rates_per_example, axis=0)
+    X_oversampled = np.repeat(X, rates_per_example, axis=0)
+    ids_oversampled = np.repeat(ids, rates_per_example, axis=0)
 
-    shuffled_indices = np.random.permutation(len(X_oversampled))
+    shuf = np.random.permutation(len(ids_oversampled))
 
-    ds_new = DatasetSplit()
-    ds_new.ids = ids_oversampled[shuffled_indices]
-    ds_new.X = X_oversampled[shuffled_indices]
-    ds_new.y = y_oversampled[shuffled_indices]
-    
-    return ds_new
+    return X_oversampled[shuf], y_oversampled[shuf], ids_oversampled[shuf]
+
+def optimize_hyperparameters(objective_f, train_split, dev_split, n_trials=100, n_jobs=1):
+  
+  warnings.filterwarnings(action='ignore', category=ConvergenceWarning)
+  study = optuna.create_study(direction="maximize")
+  study.optimize(lambda trial: objective_f(trial, train_split, dev_split, n_jobs), n_trials=n_trials)
+  return study.best_params
+
+
