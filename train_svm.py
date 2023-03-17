@@ -1,6 +1,7 @@
 import text_classification as tcls
 import general_functions as helper
-from data import Dataset
+from dataset import Dataset
+from svm_classifier import SVMClassifier
 
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -30,58 +31,18 @@ def main(args):
         'train': args.train,
         'test': args.test,
     }
-    dataset = tcls.Dataset.load(split_files, multilabel=True, label_column=args.label)
+    dataset = Dataset.load(split_files, multilabel=True, label_column=args.label)
 
     #dataset.lemmatize(args.hunspell)
     #dataset['train'].oversample()
 
-    estimator = train_svm(dataset['train'], n_jobs=args.jobs)
-    f, p, r = tcls.evaluate(estimator, dataset['test'].X, dataset['test'].y)
-    logging.info(f"Default config: F:{f:.3f}, P:{p:.3f}, R:{r:.3f}")
+    classifier = SVMClassifier()
+    classifier.train(dataset['train'], dataset['test'], n_trials=args.trials, n_jobs=args.jobs)
 
-    if args.trials > 0:
-        params = helper.optimize_hyperparameters(objective, dataset['train'], dataset['test'], n_trials=args.trials, n_jobs=args.jobs)
-        logging.info(f"Best parameters: {params}")
-    
-        estimator_opt = train_svm(dataset['train'], n_jobs=args.jobs, **params)
-        f_opt, p_opt, r_opt = tcls.evaluate(estimator_opt, dataset['test'].X, dataset['test'].y)
-        logging.info(f"Optimized config: F:{f:.3f}, P:{p:.3f}, R:{r:.3f}")
-
-        if f_opt > f:
-            estimator = estimator_opt
-            f, p, r = f_opt, p_opt, r_opt
+    pdb.set_trace()
             
-    save(estimator, dataset.label_binarizer, f, p, r, args.outdir)
+    #save(estimator, dataset.label_binarizer, f, p, r, args.outdir)
     
-    
-def train_svm(train, min_df=1, max_df=1.0, loss_f='squared_hinge', c=1.0, max_iter=1000, n_jobs=1):
-
-    tfidf_vectorizer = TfidfVectorizer(min_df=min_df, max_df=max_df)
-    estimator = LinearSVC(loss=loss_f, max_iter=max_iter, C=c)
-    estimator = CalibratedClassifierCV(estimator)
-    estimator = OneVsRestClassifier(estimator, n_jobs=n_jobs)
-
-    pipe = Pipeline([
-        ('tfidf', tfidf_vectorizer),
-        ('model', estimator),
-    ])
-    pipe.fit(train.X, train.y)
-
-    return pipe
-
-def objective(trial, train, dev, n_jobs):
-
-    min_df = trial.suggest_int("min_df", 1, 100, log=True)
-    max_df = trial.suggest_float("max_df", 0.25, 1.0)
-    loss_f = trial.suggest_categorical("loss_f", ['hinge', 'squared_hinge'])
-    c = trial.suggest_float("c", 0.25, 2.0)
-    max_iter = trial.suggest_int("max_iter", 500, 1500, log=True)
-    
-    estimator = train_svm(train, min_df, max_df, loss_f, c, max_iter, n_jobs=n_jobs)
-    f, _, _ = tcls.evaluate(estimator, dev.X, dev.y)
-    
-    return f
-
 def save(estimator, label_binarizer, f, p, r, path):
 
     if not os.path.exists(path):

@@ -52,12 +52,3 @@ def oversample(X, y, ids=None, target_f=np.average):
     shuf = np.random.permutation(len(ids_oversampled))
 
     return X_oversampled[shuf], y_oversampled[shuf], ids_oversampled[shuf]
-
-def optimize_hyperparameters(objective_f, train_split, dev_split, n_trials=100, n_jobs=1):
-  
-  warnings.filterwarnings(action='ignore', category=ConvergenceWarning)
-  study = optuna.create_study(direction="maximize")
-  study.optimize(lambda trial: objective_f(trial, train_split, dev_split, n_jobs), n_trials=n_trials)
-  return study.best_params
-
-
