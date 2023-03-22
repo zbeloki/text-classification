@@ -1,9 +1,11 @@
 import general_functions as helper
 
 from sklearn.preprocessing import MultiLabelBinarizer, LabelBinarizer
+from sklearn.model_selection import KFold
 
 import pandas as pd
 import numpy as np
+import datasets
 
 import itertools
 import pdb
@@ -40,9 +42,6 @@ class Dataset:
         for name, ds in self.splits.items():
             ds.lemmatize(dic_path)
 
-    def to_hf(self):
-        pass
-
     def __getitem__(self, split_name):
         return self.splits[split_name]
 
@@ -55,11 +54,15 @@ class DatasetSplit:
         self._data = pd.DataFrame({
             TEXT_COLUMN: texts,
             LABEL_COLUMN: labels,
-        }, index=ids)
+        }, index=pd.Index(ids, name=ID_COLUMN))
         self._y = None
 
     def binarize_labels(self, label_binarizer):
-        self._y = label_binarizer.transform(self._data[LABEL_COLUMN])
+        y = label_binarizer.transform(self._data[LABEL_COLUMN])
+        if len(label_binarizer.classes_) == 2:
+            # force one-hot encoding if binary classification, as LabelBinarizer encodes in 1D
+            y = np.array([ (1, 0) if l == 0 else (0, 1) for l in y ])
+        self._y = y
 
     @staticmethod
     def load(tsv_fpath, multilabel, label_column=LABEL_COLUMN):
@@ -106,6 +109,19 @@ class DatasetSplit:
     def labels(self):
         return self._data[LABEL_COLUMN].to_numpy().tolist()
 
+    @property
+    def n_classes(self):
+        return self._y.shape[1]
+
+    def to_hf(self):
+        ds_data = datasets.Dataset.from_pandas(self._data)
+        ds_y = datasets.Dataset.from_dict({'y': self._y})
+        ds = datasets.concatenate_datasets([ds_data, ds_y], axis=1)
+        ds = ds.remove_columns(['id', 'labels'])
+        ds = ds.rename_column('y', 'labels')
+        ds = ds.cast_column('labels', datasets.Sequence(datasets.Value(dtype='float32', id=None)))
+        return ds
+
     def lemmatize(self, dic_path):
         self._data[LEM_COLUMN] = helper.lemmatize(self._data[TEXT_COLUMN], dic_path)
 
@@ -113,3 +129,20 @@ class DatasetSplit:
         _, y, ids = helper.oversample(self.texts, self.y, self.ids, target_f)
         self._data = self._data.loc[ids]
         self._y = y
+
+    def kfold(self, k):
+        kfold = KFold(n_splits=k, shuffle=True)
+        for i, (train_index, test_index) in enumerate(kfold.split(self.y)):
+            train_split = self._build_from_indices(train_index)
+            test_split = self._build_from_indices(test_index)
+            yield i, (train_split, test_split)
+
+    def _build_from_indices(self, indices):
+        data = self._data.iloc[indices]
+        ids = data.index.to_numpy()
+        texts = data.text.to_numpy()
+        labels = data.labels.to_numpy()
+        y = self._y[indices]
+        train_split = DatasetSplit(ids, texts, labels)
+        train_split._y = y
+        return train_split

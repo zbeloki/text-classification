@@ -5,43 +5,47 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 from sklearn.calibration import CalibratedClassifierCV
+from sklearn.exceptions import ConvergenceWarning
+
+import optuna
+
+import warnings
 
 class SVMClassifier(Classifier):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, model, is_multilabel):
+        super().__init__(model, is_multilabel)
 
     @staticmethod
     def load(path):
         pass
 
-    @staticmethod
-    def predict_probabilities(texts, estimator):
-        probas = estimator.predict_proba(texts)
-        return probas
+    @classmethod
+    def train(cls, is_multilabel, train_split, dev_split=None, n_trials=0, **kwargs):
+        n_jobs = kwargs['n_jobs']
 
-    def train(self, train_split, dev_split=None, n_trials=0, n_jobs=1):
-
-        params = self._hyperparameters()
-        model, metrics = self.training_trial(params, train_split, dev_split, n_jobs)
+        params = self._default_hyperparameters()
+        model, metrics = cls._training_trial(params, train_split, dev_split, n_jobs)
+        print(f"Default hyperparameters: {metrics}")
 
         if n_trials > 0:
+            
             def objective(trial):
-                params = self._hyperparameters(trial)
-                metrics = self.training_trial(params, train_split, dev_split, n_jobs)
+                params = cls._sample_hyperparameters(trial)
+                _, metrics = cls._training_trial(params, train_split, dev_split, n_jobs)
                 return metrics['f']
+
             warnings.filterwarnings(action='ignore', category=ConvergenceWarning)
             study = optuna.create_study(direction="maximize")
             study.optimize(objective, n_trials=n_trials)
-            opt_params = study.best_params
-            opt_model, opt_metrics = self.training_trial(opt_params, train_split, dev_split, n_jobs)
 
-            if opt_metrics['f'] > metrics['f']:
-                metrics, params, model = opt_metrics, opt_params, opt_model
+            params = study.best_params
+            model, metrics = cls._training_trial(params, train_split, dev_split, n_jobs)
 
-        self._model = model
+        return SVMClassifier(model, is_multilabel)
 
-    def training_trial(self, params, train_split, dev_split=None, n_jobs=1):
+    @classmethod
+    def _training_trial(cls, params, train_split, dev_split=None, n_jobs=1):
 
         tfidf_vectorizer = TfidfVectorizer(min_df=params['min_df'], max_df=params['max_df'])
         estimator = LinearSVC(loss=params['loss'], max_iter=params['max_iter'], C=params['c'])
@@ -56,27 +60,34 @@ class SVMClassifier(Classifier):
 
         if dev_split is None:
             dev_split = train_split
-        metrics = self._evaluate_model(dev_split, pipe)
+        metrics = cls._evaluate_model(dev_split, pipe)
 
         return pipe, metrics
 
-    def _hyperparameters(self, trial=None):
+    @staticmethod
+    def predict_probabilities(texts, estimator):
+        probas = estimator.predict_proba(texts)
+        return probas
 
-        params = {}
-        if trial is None:
-            params['min_df'] = 1
-            params['max_df'] = 1.0
-            params['loss'] = 'squared_hinge'
-            params['c'] = 1.0
-            params['max_iter'] = 1000
-        else:
-            params['min_df'] = trial.suggest_int("min_df", 1, 100, log=True)
-            params['max_df'] = trial.suggest_float("max_df", 0.25, 1.0)
-            params['loss'] = trial.suggest_categorical("loss", ['hinge', 'squared_hinge'])
-            params['c'] = trial.suggest_float("c", 0.25, 2.0)
-            params['max_iter'] = trial.suggest_int("max_iter", 500, 1500, log=True)
+    @staticmethod
+    def _default_hyperparameters():
+        return {
+            'min_df': 1,
+            'max_df': 1.0,
+            'loss': 'squared_hinge',
+            'c': 1.0,
+            'max_iter': 1000,
+        }
 
-        return params
+    @staticmethod
+    def _sample_hyperparameters(trial):
+        return {
+            'min_df': trial.suggest_int("min_df", 1, 100, log=True),
+            'max_df': trial.suggest_float("max_df", 0.25, 1.0),
+            'loss': trial.suggest_categorical("loss", ['hinge', 'squared_hinge']),
+            'c': trial.suggest_float("c", 0.25, 2.0),
+            'max_iter': trial.suggest_int("max_iter", 500, 1500, log=True),
+        }
 
     def save(self, path):
         pass

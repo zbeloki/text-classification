@@ -2,6 +2,7 @@ import text_classification as tcls
 import general_functions as helper
 from dataset import Dataset
 from svm_classifier import SVMClassifier
+from transformer_classifier import TransformerClassifier
 
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -29,17 +30,25 @@ def main(args):
 
     split_files = {
         'train': args.train,
+        #'dev': args.dev,
         'test': args.test,
     }
-    dataset = Dataset.load(split_files, multilabel=True, label_column=args.label)
+    dataset = Dataset.load(split_files, multilabel=False, label_column=args.label)
 
     #dataset.lemmatize(args.hunspell)
     #dataset['train'].oversample()
 
-    classifier = SVMClassifier()
-    classifier.train(dataset['train'], dataset['test'], n_trials=args.trials, n_jobs=args.jobs)
-
-    pdb.set_trace()
+    classifier = TransformerClassifier.train(True, dataset['train'], n_trials=args.trials, model_id='orai-nlp/ElhBERTeu')
+    metrics = classifier.evaluate(dataset['test'])
+    #metrics = TransformerClassifier.cross_validate(False, dataset['train'], model_id='dccuchile/bert-base-spanish-wwm-uncased', n_folds=10)
+    print(metrics)
+    #classifier.save(args.outdir)
+    
+    #classifier = TransformerClassifier.load("/tmp/kk_model", is_multilabel=True)
+    #classifier.predict_probabilities(["Hau beldurrezko adibide bat da"], classifier._model)
+    #print(classifier.classify("Batek eta besteak ere bai"))
+    
+    #classifier = SVMClassifier.train(True, dataset['train'], dataset['test'], n_trials=args.trials, n_jobs=args.jobs)
             
     #save(estimator, dataset.label_binarizer, f, p, r, args.outdir)
     
@@ -106,7 +115,7 @@ if __name__ == '__main__':
                         required=False,
                         help="Hunspell hiztegiaren patha, luzapenik gabe")
     parser.add_argument("--outdir",
-                        required=True,
+                        required=False,
                         help="Output path where the model will be created")
     args = parser.parse_args()
 

@@ -3,7 +3,6 @@ from sklearn.svm import LinearSVC
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.exceptions import ConvergenceWarning
 
 import optuna
 import pandas as pd
