@@ -1,4 +1,4 @@
-import general_functions as helper
+import classification.utils as utils
 
 from sklearn.preprocessing import MultiLabelBinarizer, LabelBinarizer
 from sklearn.model_selection import KFold
@@ -123,10 +123,10 @@ class DatasetSplit:
         return ds
 
     def lemmatize(self, dic_path):
-        self._data[LEM_COLUMN] = helper.lemmatize(self._data[TEXT_COLUMN], dic_path)
+        self._data[LEM_COLUMN] = utils.lemmatize(self._data[TEXT_COLUMN], dic_path)
 
     def oversample(self, target_f=np.average):
-        _, y, ids = helper.oversample(self.texts, self.y, self.ids, target_f)
+        _, y, ids = utils.oversample(self.texts, self.y, self.ids, target_f)
         self._data = self._data.loc[ids]
         self._y = y
 

@@ -10,8 +10,20 @@ import numpy as np
 import hunspell  # libhunspell-dev
 from nltk.tokenize import RegexpTokenizer
 import tqdm
+
 import warnings
+import re
 import pdb
+
+def clean_texts(texts):
+
+  regex = re.compile('<.*?>')
+  clean_texts = []
+  for txt in tqdm.tqdm(texts):
+    txt = re.sub(regex, ' ', txt)
+    txt = ' '.join(txt.split())
+    clean_texts.append(txt)
+  return clean_texts
 
 def lemmatize(texts, dic_path):
 
