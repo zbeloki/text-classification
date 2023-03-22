@@ -4,4 +4,5 @@ nltk
 optuna
 pandas
 scikit-learn
+scikit-multilearn
 tqdm

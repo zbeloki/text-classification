@@ -1,0 +1,75 @@
+#!python3
+
+import classification.dataset as dataset
+import classification.utils as utils
+
+import pandas as pd
+
+import argparse
+
+def train_svm(args):
+    pass
+
+def train_transformer(args):
+    pass
+
+def evaluate(args):
+    pass
+
+def clean_dataset(args):
+    
+    data = pd.read_csv(args.tsv, sep='\t', keep_default_na=False)
+    data[dataset.TEXT_COLUMN] = utils.clean_texts(data[dataset.TEXT_COLUMN])
+    data.to_csv(args.out, sep='\t', index=False)
+
+def lemmatize_dataset(args):
+
+    data = pd.read_csv(args.tsv, sep='\t', keep_default_na=False)
+    lemmatized = utils.lemmatize(data[dataset.TEXT_COLUMN], args.hunspell)
+    text_idx = data.columns.tolist().index(dataset.TEXT_COLUMN)
+    data.insert(text_idx+1, dataset.LEM_COLUMN, lemmatized)
+    data.to_csv(args.out, sep='\t', index=False)
+    
+def split_dataset(args):
+    pass
+
+def classify(args):
+    pass
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(
+        dest='action',
+        required=True,
+        help="Main action")
+
+    parser_dataset = subparsers.add_parser('dataset')
+    parser_dataset.add_argument(
+        "tsv",
+        help="")
+    parser_dataset.add_argument(
+        "out",
+        help="")
+    subparsers_dataset = parser_dataset.add_subparsers(
+        dest='dataset_action',
+        required=True,
+        help="")
+
+    parser_dataset_lemmatize = subparsers_dataset.add_parser('lemmatize')
+    parser_dataset_lemmatize.add_argument(
+        'hunspell',
+        help="")
+    parser_dataset_clean = subparsers_dataset.add_parser('clean')
+    
+    parser_train = subparsers.add_parser('train')
+    parser_evaluate = subparsers.add_parser('evaluate')
+    parser_classify = subparsers.add_parser('classify')
+
+    args = parser.parse_args()
+
+    if args.action == 'dataset':
+        if args.dataset_action == 'lemmatize':
+            lemmatize_dataset(args)
+        elif args.dataset_action == 'clean':
+            clean_dataset(args)
