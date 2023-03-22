@@ -6,6 +6,7 @@ import classification.utils as utils
 import pandas as pd
 
 import argparse
+import pdb
 
 def train_svm(args):
     pass
@@ -18,17 +19,15 @@ def evaluate(args):
 
 def clean_dataset(args):
     
-    data = pd.read_csv(args.tsv, sep='\t', keep_default_na=False)
-    data[dataset.TEXT_COLUMN] = utils.clean_texts(data[dataset.TEXT_COLUMN])
-    data.to_csv(args.out, sep='\t', index=False)
+    ds = dataset.DatasetSplit.load(args.tsv, True)
+    ds.clean_texts()
+    ds.save(args.out)
 
 def lemmatize_dataset(args):
 
-    data = pd.read_csv(args.tsv, sep='\t', keep_default_na=False)
-    lemmatized = utils.lemmatize(data[dataset.TEXT_COLUMN], args.hunspell)
-    text_idx = data.columns.tolist().index(dataset.TEXT_COLUMN)
-    data.insert(text_idx+1, dataset.LEM_COLUMN, lemmatized)
-    data.to_csv(args.out, sep='\t', index=False)
+    ds = dataset.DatasetSplit.load(args.tsv, True)
+    ds.lemmatize(args.hunspell)
+    ds.save(args.out)
     
 def split_dataset(args):
     pass
