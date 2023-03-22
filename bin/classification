@@ -19,17 +19,18 @@ def evaluate(args):
 
 def clean_dataset(args):
     
-    ds = dataset.DatasetSplit.load(args.tsv, True)
+    ds = dataset.DatasetSplit.load(args.tsv, mode=None)
     ds.clean_texts()
     ds.save(args.out)
 
 def lemmatize_dataset(args):
 
-    ds = dataset.DatasetSplit.load(args.tsv, True)
+    ds = dataset.DatasetSplit.load(args.tsv, mode=None)
     ds.lemmatize(args.hunspell)
     ds.save(args.out)
     
 def split_dataset(args):
+
     pass
 
 def classify(args):
