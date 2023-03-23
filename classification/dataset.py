@@ -1,13 +1,15 @@
 import classification.utils as utils
 
 from sklearn.preprocessing import MultiLabelBinarizer, LabelBinarizer
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, train_test_split
+from skmultilearn.model_selection import iterative_train_test_split
 
 import pandas as pd
 import numpy as np
 import datasets
 
 import itertools
+import logging
 import pdb
 import os
 
@@ -21,8 +23,6 @@ class Dataset:
 
     def __init__(self, splits, mode='auto'):
         self.splits = splits
-        self.multilabel = multilabel
-        self._binarize_labels()
         # mode is multilabel?
         if mode not in [None, 'auto', 'multilabel', 'multiclass']:
             raise ValueError("Param 'mode' must be one of: 'auto', 'multilabel', 'multiclass', None")
@@ -33,13 +33,17 @@ class Dataset:
         elif mode == 'auto' and len(splits) > 0:
             are_multilabel = [ ds._is_multilabel for ds in splits.values() ]
             if len(set(are_multilabel)) != 1:
-                raise ValueError("Cannot infer mode automatically, values for different splits differ")
-            self._is_multilabel = are_multilabel[0]
+                logging.warning("Cannot infer mode automatically, values for different splits differ")
+                self._is_multilabel = None
+            else:
+                self._is_multilabel = are_multilabel[0]
         else:
             self._is_multilabel = None
+        # binarize labels
+        self._binarize_labels()
 
     def _binarize_labels(self):
-        self.label_binarizer = MultiLabelBinarizer() if self.multilabel else LabelBinarizer()
+        self.label_binarizer = MultiLabelBinarizer() if self._is_multilabel else LabelBinarizer()
         merged_labels = list(itertools.chain(*[ ds.labels for ds in self.splits.values() ]))
         self.label_binarizer.fit(merged_labels)
         for name, ds in self.splits.items():
@@ -67,10 +71,12 @@ class Dataset:
     def __contains__(self, split_name):
         return split_name in self.splits
 
-    def save(self, path):
+    def save(self, path, override=False):
+        if os.path.isfile(path):
+            raise ValueError(f"The given path corresponds to an existing file")
         for name, ds in self.splits.items():
             fpath = os.path.join(path, name+'.tsv')
-            ds.save(fpath)
+            ds.save(fpath, override)
 
 class DatasetSplit:
 
@@ -93,12 +99,15 @@ class DatasetSplit:
             self._is_multilabel = True
         elif mode == 'multiclass':
             self._is_multilabel = False
-        elif mode == 'auto' and self._label_column in self._data.columns:
-            self._is_multilabel = any(self._data[self._label_column].str.find(LABEL_SEP) >= 0)
+        elif mode == 'auto' and self.label_column in self._data.columns:
+            self._is_multilabel = any(self._data[self.label_column].str.find(LABEL_SEP) >= 0)
         else:
             self._is_multilabel = None
 
-    def binarize_labels(self, label_binarizer):
+    def binarize_labels(self, label_binarizer=None):
+        if label_binarizer is None:
+            label_binarizer = MultiLabelBinarizer() if self._is_multilabel else LabelBinarizer()
+            label_binarizer.fit(self.labels)
         y = label_binarizer.transform(self._data[self.label_column])
         if len(label_binarizer.classes_) == 2:
             # force one-hot encoding if binary classification, as LabelBinarizer encodes in 1D
@@ -154,10 +163,15 @@ class DatasetSplit:
 
     @property
     def label_column(self):
-        label_column = self._label_column if self._label_column is not None else LABEL_COLUMN
-        if label_column not in self._data.columns:
-            raise KeyError(f"Label column '{label_column}' not found")
-        return label_column
+        col = self._label_column
+        if col is None:
+            if len(self.label_columns) == 1:
+                col = self.label_columns[0]
+            else:
+                col = LABEL_COLUMN
+        if col not in self._data.columns:
+            raise KeyError(f"Label column '{col}' not found")
+        return col
 
     @property
     def label_columns(self):
@@ -196,8 +210,40 @@ class DatasetSplit:
         self._data = self._data.loc[ids]
         self._y = y
 
-    def split(self, sizes):
-        pass
+    def split(self, names, sizes, label_column=None):
+        if len(names) != len(sizes):
+            raise ValueError("'names' and 'sizes' must contain the same number of items")
+        if sum(sizes) > 1.0:
+            raise ValueError("Split sizes sum up to a value greater than 1")
+        if label_column is None:
+            label_column = self.label_column
+        if len(self.label_columns) > 1 and label_column is None:
+            raise ValueError("Multiple label columns found in the dataset and label_column is undefined, specify the column to use for stratification providing the 'label' argument")
+
+        if self._is_multilabel:
+            split_f = iterative_train_test_split
+            mode = 'multilabel'
+        else:
+            split_f = lambda X, y, size: train_test_split(X, y, test_size=size, stratify=np.argmax(y, axis=1))
+            mode = 'multiclass' if self._is_multilabel == False else 'auto'
+        try:
+            rem_inds = np.array(range(len(self.y)))
+        except RuntimeError as e:
+            raise RuntimeError("DatasetSplit labels must be binarized before spliting")
+
+        specs = [ (name, size) for name, size in zip(names, sizes) if size > 0.0 ]
+        splits = {}
+        for i, (split_name, split_size) in enumerate(specs):
+            if i == len(specs)-1:
+                split_inds = rem_inds
+            else:
+                size = split_size / (len(rem_inds) / len(self._data.index))
+                res = split_f(rem_inds.reshape((-1,1)), self.y[rem_inds,:], 1.0-size)
+                split_inds = res[0].squeeze()
+                rem_inds = np.array([ idx for idx in rem_inds if idx not in split_inds ])
+            splits[split_name] = self._build_from_indices(split_inds)
+
+        return Dataset(splits, mode)
 
     def kfold(self, k):
         kfold = KFold(n_splits=k, shuffle=True)
@@ -216,7 +262,12 @@ class DatasetSplit:
         train_split._y = y
         return train_split
 
-    def save(self, fpath):
+    def save(self, fpath, override=False):
+        if not override and os.path.isfile(fpath):
+            raise ValueError(f"The given path corresponds to an existing file")
+        dir_path = os.path.dirname(fpath)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
         if self._is_multilabel:
             for col in self.label_columns:
                 self._data[col] = self._data[col].str.join(LABEL_SEP)

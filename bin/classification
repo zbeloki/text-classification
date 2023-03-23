@@ -1,6 +1,6 @@
 #!python3
 
-import classification.dataset as dataset
+from classification.dataset import Dataset, DatasetSplit
 import classification.utils as utils
 
 import pandas as pd
@@ -19,22 +19,48 @@ def evaluate(args):
 
 def clean_dataset(args):
     
-    ds = dataset.DatasetSplit.load(args.tsv, mode=None)
+    ds = DatasetSplit.load(args.tsv, mode=None)
     ds.clean_texts()
     ds.save(args.out)
 
 def lemmatize_dataset(args):
 
-    ds = dataset.DatasetSplit.load(args.tsv, mode=None)
+    ds = DatasetSplit.load(args.tsv, mode=None)
     ds.lemmatize(args.hunspell)
     ds.save(args.out)
     
 def split_dataset(args):
 
-    pass
+    names, sizes = _parse_split_args(args)
+    ds = DatasetSplit.load(args.tsv, label_column=args.label)
+    ds.binarize_labels()
+    dataset = ds.split(names, sizes)
+    dataset.save(args.out, override=args.force)
 
 def classify(args):
     pass
+
+
+def _parse_split_args(args):
+
+    args = {
+        'train': args.train,
+        'test': args.test,
+        'dev': args.dev,
+    }
+    non_none_sizes = [ v for v in args.values() if v is not None ]
+    if sum(non_none_sizes) > 1.0:
+        raise ValueError("Overall size is greater than 1")
+    if len(non_none_sizes) == 1:
+        raise ValueError("Providing at least two split sizes is required. To use default sizes don't provide any size at all.")
+    elif len(non_none_sizes) == 0:
+        args['train'], args['test'], args['dev'] = 0.7, 0.15, 0.15
+    elif len(non_none_sizes) == 2:
+        missing_size = 1.0 - sum(non_none_sizes)
+        args = { name: (size if size is not None else missing_size) for name, size in args.items() }
+        
+    names, sizes = zip(*args.items())
+    return names, sizes
 
 if __name__ == '__main__':
 
@@ -61,6 +87,26 @@ if __name__ == '__main__':
         'hunspell',
         help="")
     parser_dataset_clean = subparsers_dataset.add_parser('clean')
+    parser_dataset_split = subparsers_dataset.add_parser('split')
+    parser_dataset_split.add_argument(
+        '--train',
+        type=float,
+        help="Relative size of the training set")
+    parser_dataset_split.add_argument(
+        '--test',
+        type=float,
+        help="Relative size of the test set")
+    parser_dataset_split.add_argument(
+        '--dev',
+        type=float,
+        help="Relative size of the development set")
+    parser_dataset_split.add_argument(
+        '--label',
+        help="Use this column to stratify splits. Required if more than one label-column exist.")
+    parser_dataset_split.add_argument(
+        '--force',
+        action='store_true',
+        help="Overwrite dataset split files when exist")
     
     parser_train = subparsers.add_parser('train')
     parser_evaluate = subparsers.add_parser('evaluate')
@@ -73,3 +119,5 @@ if __name__ == '__main__':
             lemmatize_dataset(args)
         elif args.dataset_action == 'clean':
             clean_dataset(args)
+        elif args.dataset_action == 'split':
+            split_dataset(args)
