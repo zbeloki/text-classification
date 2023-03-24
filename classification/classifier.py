@@ -4,24 +4,21 @@ from sklearn.metrics import fbeta_score, precision_score, recall_score
 import numpy as np
 
 import logging
+import os
+import json
 import pdb
 
 logging.basicConfig(level=logging.INFO)
 
 class Classifier(ABC):
     
-    def __init__(self, model, is_multilabel):
+    def __init__(self, model, config):
         self._model = model
-        self._is_multilabel = is_multilabel
+        self._config = config
 
 
     # PUBLIC ABSTRACT methods
     
-    @staticmethod
-    @abstractmethod
-    def load(path):
-        pass
-
     @staticmethod
     @classmethod
     def train(cls, is_multilabel, train_split, dev_split=None, n_trials=0, *args, **kwargs):
@@ -32,9 +29,10 @@ class Classifier(ABC):
     def predict_probabilities(texts, model):
         pass
 
+    @classmethod
     @abstractmethod
-    def save(self, path):
-        pass
+    def load(cls, path):
+        pass    
 
     
     # PUBLIC methods
@@ -59,7 +57,12 @@ class Classifier(ABC):
     def evaluate(self, test_split, beta=1):
         return self._evaluate_model(test_split, self._model, beta)
 
-    
+    def save(self, path):
+        if not os.path.exists(path):
+            os.makedirs(path)
+        self._config.save(path)
+
+        
     # PROTECTED ABSTRACT methods
 
     @staticmethod
