@@ -50,7 +50,7 @@ class Dataset:
             ds.binarize_labels(self.label_binarizer)
 
     @staticmethod
-    def load(split_files, mode='auto', label_column=LABEL_COLUMN):
+    def load(split_files, mode='auto', label_column=None):
         splits = {
             name: DatasetSplit.load(fpath, mode, label_column)
             for name, fpath in split_files.items()
