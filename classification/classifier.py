@@ -21,7 +21,7 @@ class Classifier(ABC):
     
     @staticmethod
     @classmethod
-    def train(cls, is_multilabel, train_split, dev_split=None, n_trials=0, *args, **kwargs):
+    def train(cls, train_split, dev_split=None, n_trials=0, *args, **kwargs):
         pass
 
     @staticmethod
@@ -38,11 +38,11 @@ class Classifier(ABC):
     # PUBLIC methods
     
     @classmethod
-    def cross_validate(cls, is_multilabel, dataset, n_folds=5, beta=1, *args, **kwargs):
+    def cross_validate(cls, dataset, n_folds=5, beta=1, *args, **kwargs):
         all_metrics = []
         for i, (train_split, test_split) in dataset.kfold(n_folds):
             logging.info(f"Training fold {i+1}/{n_folds}")
-            classifier = cls.train(is_multilabel, train_split, n_trials=0, *args, **kwargs)
+            classifier = cls.train(train_split, n_trials=0, *args, **kwargs)
             metrics = classifier.evaluate(test_split, beta)
             logging.info(f"Fold {i+1} metrics: {metrics}")
             all_metrics.append(metrics)

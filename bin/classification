@@ -11,11 +11,8 @@ import pdb
 
 def train_svm(args):
     dataset = _load_dataset(args)
-    classifier = SVMClassifier.train(True, dataset['train'], dataset['test'], n_trials=args.trials, n_jobs=args.jobs)
-    print(classifier.evaluate(dataset['test']))
+    classifier = SVMClassifier.train(dataset['train'], dataset['test'], n_trials=args.trials, n_jobs=args.jobs)
     classifier.save(args.out)
-    c = SVMClassifier.load(args.out)
-    print(c.evaluate(dataset['test']))
 
 def train_transformer(args):
     pass

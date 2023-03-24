@@ -22,8 +22,9 @@ class SVMClassifier(Classifier):
         super().__init__(model, config)
 
     @classmethod
-    def train(cls, is_multilabel, train_split, dev_split=None, n_trials=0, **kwargs):
+    def train(cls, train_split, dev_split=None, n_trials=0, **kwargs):
         n_jobs = kwargs['n_jobs']
+        config = Config.from_dict(kwargs)
 
         params = cls._default_hyperparameters()
         model, metrics = cls._training_trial(params, train_split, dev_split, n_jobs)
@@ -43,8 +44,6 @@ class SVMClassifier(Classifier):
             params = study.best_params
             model, metrics = cls._training_trial(params, train_split, dev_split, n_jobs)
 
-        mode = 'multilabel' if is_multilabel else 'multiclass'
-        config = Config(mode=mode)
         return SVMClassifier(model, config)
 
     @classmethod
