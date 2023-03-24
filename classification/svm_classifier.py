@@ -1,4 +1,4 @@
-from classifier import Classifier
+from classification.classifier import Classifier
 
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -24,7 +24,7 @@ class SVMClassifier(Classifier):
     def train(cls, is_multilabel, train_split, dev_split=None, n_trials=0, **kwargs):
         n_jobs = kwargs['n_jobs']
 
-        params = self._default_hyperparameters()
+        params = cls._default_hyperparameters()
         model, metrics = cls._training_trial(params, train_split, dev_split, n_jobs)
         print(f"Default hyperparameters: {metrics}")
 

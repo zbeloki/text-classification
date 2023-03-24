@@ -68,6 +68,9 @@ class Dataset:
     def __getitem__(self, split_name):
         return self.splits[split_name]
 
+    def __setitem__(self, split_name, split):
+        self.splits[split_name] = split
+    
     def __contains__(self, split_name):
         return split_name in self.splits
 

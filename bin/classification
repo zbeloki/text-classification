@@ -1,6 +1,7 @@
 #!python3
 
 from classification.dataset import Dataset, DatasetSplit
+from classification.svm_classifier import SVMClassifier
 import classification.utils as utils
 
 import pandas as pd
@@ -9,7 +10,10 @@ import argparse
 import pdb
 
 def train_svm(args):
-    pass
+    dataset = _load_dataset(args)
+    pdb.set_trace()
+    classifier = SVMClassifier.train(True, dataset['train'], dataset['test'], n_trials=args.trials, n_jobs=args.jobs)
+    classifier.save(args.out)
 
 def train_transformer(args):
     pass
@@ -41,6 +45,22 @@ def classify(args):
     pass
 
 
+def _load_dataset(args):
+
+    splits = {
+        'train': args.train,
+    }
+    if args.test is not None:
+        splits['test'] = args.test
+    if args.dev is not None:
+        splits['dev'] = args.dev
+        
+    dataset = Dataset.load(splits, args.mode)
+    for name in ['train', 'test', 'dev']:
+        if name not in dataset:
+            dataset[name] = None
+    return dataset
+    
 def _parse_split_args(args):
 
     args = {
@@ -70,6 +90,8 @@ if __name__ == '__main__':
         required=True,
         help="Main action")
 
+    # DATASET
+    
     parser_dataset = subparsers.add_parser('dataset')
     parser_dataset.add_argument(
         "tsv",
@@ -107,8 +129,49 @@ if __name__ == '__main__':
         '--force',
         action='store_true',
         help="Overwrite dataset split files when exist")
+
+    # TRAIN
     
     parser_train = subparsers.add_parser('train')
+    parser_train.add_argument(
+        '--train',
+        required=True,
+        help="Train dataset split")    
+    parser_train.add_argument(
+        '--test',
+        help="Test dataset split")    
+    parser_train.add_argument(
+        '--dev',
+        help="Dev dataset split")    
+    parser_train.add_argument(
+        '--mode',
+        default='auto',
+        help="Classification setting: 'multilabel', 'multiclass', 'auto', None")        
+    parser_train.add_argument(
+        '--trials',
+        type=int,
+        default=0,
+        help="Number of trials for hyperparameter tuning in addition to the one with default hyperparameters")    
+    parser_train.add_argument(
+        "--out",
+        required=True,
+        help="Output directory to save the model")
+    subparsers_train = parser_train.add_subparsers(
+        dest='model',
+        required=True,
+        help="The kind of model train")    
+    
+    # TRAIN svm
+
+    parser_train_svm = subparsers_train.add_parser('svm')
+    parser_train_svm.add_argument(
+        '--jobs',
+        type=int,
+        default=1,
+        help="Number of parallel jobs for training")    
+
+    parser_train_trans = subparsers_train.add_parser('transformer')
+    
     parser_evaluate = subparsers.add_parser('evaluate')
     parser_classify = subparsers.add_parser('classify')
 
@@ -121,3 +184,7 @@ if __name__ == '__main__':
             clean_dataset(args)
         elif args.dataset_action == 'split':
             split_dataset(args)
+
+    elif args.action == 'train':
+        if args.model == 'svm':
+            train_svm(args)
