@@ -103,7 +103,7 @@ class DatasetSplit:
         elif mode == 'multiclass':
             self._is_multilabel = False
         elif mode == 'auto' and self.label_column in self._data.columns:
-            self._is_multilabel = any(self._data[self.label_column].str.find(LABEL_SEP) >= 0)
+            self._is_multilabel = any(self._data[self.label_column].map(len) > 1)
         else:
             self._is_multilabel = None
 
@@ -126,9 +126,13 @@ class DatasetSplit:
             raise KeyError(f"Column '{label_column}' not found in {tsv_fpath}")
         ids = df[ID_COLUMN]
         texts = df[TEXT_COLUMN]
-        label_columns = [ col for col in df.columns if col not in [ID_COLUMN, TEXT_COLUMN] ]
+        label_columns = [ col for col in df.columns if col not in [ID_COLUMN, TEXT_COLUMN, LEM_COLUMN] ]
         labels = df[label_columns]
-        label_column_ = label_column if label_column is not None else LABEL_COLUMN
+        label_column_ = label_column
+        if label_column_ is None:
+            label_column_ = label_columns[0] if len(label_columns) == 1 else LABEL_COLUMN
+        if label_column_ not in label_columns:
+            raise ValueError("Label column not set and multiple label columns found, but none of them is called 'labels'. Please specify the label_column.")
         if mode == 'auto' and label_column_ in label_columns:
             mode = 'multilabel' if any(labels[label_column_].str.find(LABEL_SEP) >= 0) else 'multiclass'
         if mode == 'multilabel':
@@ -178,7 +182,7 @@ class DatasetSplit:
 
     @property
     def label_columns(self):
-        return [ col for col in self._data.columns if col not in [TEXT_COLUMN, LEM_COLUMN] ]
+        return [ col for col in self._data.columns if col not in [ID_COLUMN, TEXT_COLUMN, LEM_COLUMN] ]
     
     @property
     def labels(self):
@@ -261,6 +265,7 @@ class DatasetSplit:
         texts = data[TEXT_COLUMN].to_numpy()
         labels = data[self.label_column].to_numpy()
         y = self._y[indices]
+        labels = {self.label_column: labels}
         train_split = DatasetSplit(ids, texts, labels)
         train_split._y = y
         return train_split

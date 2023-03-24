@@ -105,7 +105,7 @@ if __name__ == '__main__':
 
     parser_dataset_lemmatize = subparsers_dataset.add_parser('lemmatize')
     parser_dataset_lemmatize.add_argument(
-        'hunspell',
+        '--hunspell',
         help="")
     parser_dataset_clean = subparsers_dataset.add_parser('clean')
     parser_dataset_split = subparsers_dataset.add_parser('split')
