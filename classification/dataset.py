@@ -14,11 +14,7 @@ import pdb
 import os
 from collections.abc import MutableMapping
 
-ID_COLUMN = 'id'
-TEXT_COLUMN = 'text'
-LABEL_COLUMN = 'labels'
-LEM_COLUMN = 'text_lem'
-LABEL_SEP = '|'
+LEM_SUFFIX = '_lem'
 
 class Dataset(MutableMapping):
 
@@ -94,42 +90,58 @@ class Dataset(MutableMapping):
 
 class DatasetSplit:
 
-    def __init__(self, ids, texts, labels, label_column=None):
-        self._data = pd.DataFrame({
-            TEXT_COLUMN: texts,
-        }, index=pd.Index(ids, name=ID_COLUMN))
-        if type(labels) == dict:
-            for column, label_values in labels.items():
-                self._data[column] = label_values
-            self._label_column = label_column
-        else:
-            self._data[LABEL_COLUMN] = labels
-            self._label_column = LABEL_COLUMN
+    def __init__(self, df, id_column=None, text_columns=None, label_column=None):
+
+        idc, textc, labelc = self._decide_columns(df.columns, id_column, text_columns, label_column)
+        self._data = df
+        self._data.set_index(idc, inplace=True)
+        self._idc = idc
+        self._textc = textc
+        self._labelc = labelc
+        
+    @classmethod
+    def load(cls, fpath, id_column=None, text_columns=None, label_column=None, label_sep=None):
+        
+        column_sep = ',' if os.path.splitext(fpath)[1] == '.csv' else '\t'
+        df = pd.read_csv(fpath, sep=column_sep, keep_default_na=False, dtype=str)
+        idc, textc, labelc = cls._decide_columns(df.columns, id_column, text_columns, label_column)
+
+        if label_sep is not None:
+            pd.options.mode.chained_assignment = None # avoid warning
+            df[labelc] = df[labelc].str.split(label_sep)
+            # filter out empty-strings from labels
+            df[labelc] = df[labelc].map(lambda ls: list(filter(lambda e: e != "", ls)))
+            
+        return DatasetSplit(df, idc, textc, labelc)
 
     @staticmethod
-    def load(tsv_fpath, label_column=None, label_sep=None):
-        column_sep = ',' if os.path.splitext(tsv_fpath)[1] == '.csv' else '\t'
-        df = pd.read_csv(tsv_fpath, sep=column_sep, keep_default_na=False, dtype=str)
-        if ID_COLUMN not in df.columns or TEXT_COLUMN not in df.columns:
-            raise KeyError(f"Column '{ID_COLUMN}' or '{TEXT_COLUMN}' not found in {tsv_fpath}")
-        if label_column is not None and label_column not in df.columns:
-            raise KeyError(f"Column '{label_column}' not found in {tsv_fpath}")
-        ids = df[ID_COLUMN]
-        texts = df[TEXT_COLUMN]
-        label_columns = [ col for col in df.columns if col not in [ID_COLUMN, TEXT_COLUMN, LEM_COLUMN] ]
-        labels = df[label_columns]
-        label_column_ = label_column
-        if label_column_ is None:
-            label_column_ = label_columns[0] if len(label_columns) == 1 else LABEL_COLUMN
-        if label_column_ not in label_columns:
-            raise ValueError("Label column not set and multiple label columns found, but none of them is called 'labels'. Please specify the label_column.")
-        if label_sep is not None:
-            for col in label_columns:
-                pd.options.mode.chained_assignment = None # avoid warning
-                labels[col] = labels[col].str.split(label_sep)
-                # filter out empty-strings from labels
-                labels[col] = labels[col].map(lambda ls: list(filter(lambda e: e != "", ls)))
-        return DatasetSplit(ids.tolist(), texts.tolist(), labels.to_dict('list'), label_column)
+    def _decide_columns(columns, id_column, text_columns, label_column):
+        
+        if id_column is None:
+            for col in columns:
+                if col.lower() in ['id', 'ids']:
+                    id_column = col
+                    break
+            if id_column is None:
+                raise ValueError("Could not infer the column for IDs. Provide 'id_column'.")
+            
+        if text_columns is None:
+            text_columns = []
+            for col in columns:
+                if 'text' in col.lower():
+                    text_columns.append(col)
+            if len(text_columns) == 0:
+                raise ValueError("Could not infer the column(s) for texts. Provide 'text_columns'.")
+            
+        if label_column is None:
+            for col in columns:
+                if 'label' in col.lower():
+                    label_column = col
+                    break
+            if label_column is None:
+                raise ValueError("Could not infer the column for labels. Provide 'label_column'.")
+
+        return id_column, text_columns, label_column
 
     @property
     def ids(self):
@@ -137,22 +149,32 @@ class DatasetSplit:
     
     @property
     def texts(self):
-        return self._data[TEXT_COLUMN].tolist()
+        texts = []
+        concat_texts = lambda row: ' '.join([ row[textc] for textc in self._textc ])
+        texts = self._data.apply(concat_texts, axis=1)
+        return texts.tolist()
 
     @property
     def lemmatized_texts(self):
-        if LEM_COLUMN not in self._data.columns:
-            raise RuntimeError("Dataset is not lemmatized")
-        return self._data[LEM_COLUMN].tolist()
+        try:
+            texts = []
+            concat_texts = lambda row: ' '.join([ row[textc+LEM_SUFFIX] for textc in self._textc ])
+            texts = self._data.apply(concat_texts, axis=1)
+            return texts.tolist()
+        except KeyError:
+            raise RuntimeError(f"At least one column from {', '.join(self._textc)} is not lemmatized")
 
     @property
     def X(self):
-        column = LEM_COLUMN if LEM_COLUMN in self._data.columns else TEXT_COLUMN
-        return self._data[column].tolist()
+        try:
+            return self.lemmatized_texts
+        except RuntimeError:
+            # warning
+            return self.texts
 
     @property
     def labels(self):
-        return self._data[self.label_column].tolist()
+        return self._data[self._labelc].tolist()
 
     @property
     def y(self):
@@ -164,68 +186,41 @@ class DatasetSplit:
         return False if len(labels) == 0 else type(self.labels[0]) == list
 
     @property
-    def label_columns(self):
-        return [ col for col in self._data.columns if col not in [ID_COLUMN, TEXT_COLUMN, LEM_COLUMN] ]
-    
-    @property
     def label_column(self):
-        col = self._label_column
-        if col is None:
-            if len(self.label_columns) == 1:
-                col = self.label_columns[0]
-            else:
-                col = LABEL_COLUMN
-        if col not in self._data.columns:
-            raise KeyError(f"Label column '{col}' not found")
-        return col
+        return self._labelc
 
     def to_hf(self):
-        columns = [ID_COLUMN, TEXT_COLUMN, self.label_column]
-        ds_data = datasets.Dataset.from_pandas(self._data[columns])
-        ds_y = datasets.Dataset.from_dict({'y': self._y})
-        ds = datasets.concatenate_datasets([ds_data, ds_y], axis=1)
-        ds = ds.remove_columns([ID_COLUMN, self.label_column])
-        ds = ds.rename_column('y', 'labels')
-        ds = ds.cast_column('labels', datasets.Sequence(datasets.Value(dtype='float32', id=None)))
+        ds = datasets.Dataset.from_pandas(self._data)
+        ds = ds.rename_column(self._labelc, 'labels')
+        ds = ds.cast_column('labels', datasets.Sequence(datasets.Value(dtype='string', id=None)))
         return ds
 
     def clean_texts(self):
-        self._data[TEXT_COLUMN] = utils.clean_texts(self._data[TEXT_COLUMN])
+        for col in self._textc:
+            self._data[col] = utils.clean_texts(self._data[col])
         
     def lemmatize(self, dic_path):
-        lemmatized = utils.lemmatize(self._data[TEXT_COLUMN], dic_path)
-        text_idx = self._data.columns.tolist().index(TEXT_COLUMN)
-        self._data.insert(text_idx+1, LEM_COLUMN, lemmatized)
+        for col in self._textc:
+            lemmatized = utils.lemmatize(self._data[col], dic_path)
+            text_idx = self._data.columns.tolist().index(col)
+            self._data.insert(text_idx+1, col+LEM_SUFFIX, lemmatized)
 
     def oversample(self, target_f=np.average):
-        _, y, ids = utils.oversample(self.texts, self.y, self.ids, target_f)
+        _, _, ids = utils.oversample(self.texts, self._binarize_labels(), self.ids, target_f)
         self._data = self._data.loc[ids]
-        self._y = y
 
-    def binarize_labels(self):
-        lb = MultiLabelBinarizer() if self.is_multilabel else LabelBinarizer()
-        y = lb.fit_transform(self.labels)
-        if len(lb.classes_) == 2:
-            # force one-hot encoding if binary classification, as LabelBinarizer encodes in 1D
-            y = np.array([ (1, 0) if l == 0 else (0, 1) for l in y ])
-        return y
-
-    def split(self, names, sizes, label_column=None):
+    def split(self, names, sizes):
         if len(names) != len(sizes):
             raise ValueError("'names' and 'sizes' must contain the same number of items")
         if sum(sizes) > 1.0:
             raise ValueError("Split sizes sum up to a value greater than 1")
-        if label_column is None:
-            label_column = self.label_column
-        if len(self.label_columns) > 1 and label_column is None:
-            raise ValueError("Multiple label columns found in the dataset and label_column is undefined, specify the column to use for stratification providing the 'label' argument")
 
         if self.is_multilabel:
             split_f = iterative_train_test_split
         else:
             split_f = lambda X, y, size: train_test_split(X, y, test_size=size, stratify=np.argmax(y, axis=1))
 
-        y = self.binarize_labels()
+        y = self._binarize_labels()
         rem_inds = np.array(range(len(self.y)))
 
         specs = [ (name, size) for name, size in zip(names, sizes) if size > 0.0 ]
@@ -251,20 +246,24 @@ class DatasetSplit:
 
     def _build_from_indices(self, indices):
         data = self._data.iloc[indices]
-        ids = data.index.to_numpy()
-        texts = data[TEXT_COLUMN].to_numpy()
-        labels = data[self.label_column].to_numpy()
-        labels = {self.label_column: labels}
-        train_split = DatasetSplit(ids, texts, labels)
-        return train_split
+        return DatasetSplit(data.reset_index(), id_column=self._idc, text_columns=self._textc,
+                            label_column=self._labelc)
 
-    def save(self, fpath, sep='|', override=False):
+    def _binarize_labels(self):
+        lb = MultiLabelBinarizer() if self.is_multilabel else LabelBinarizer()
+        y = lb.fit_transform(self.labels)
+        if len(lb.classes_) == 2:
+            # force one-hot encoding if binary classification, as LabelBinarizer encodes in 1D
+            y = np.array([ (1, 0) if l == 0 else (0, 1) for l in y ])
+        return y
+
+    def save(self, fpath, label_sep='|', override=False):
         if not override and os.path.isfile(fpath):
             raise ValueError(f"The given path corresponds to an existing file")
         dir_path = os.path.dirname(fpath)
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
         if self.is_multilabel:
-            for col in self.label_columns:
-                self._data[col] = self._data[col].str.join(sep)
-        self._data.to_csv(fpath, sep='\t', index=True)
+            self._data[self._labelc] = self._data[self._labelc].str.join(label_sep)
+        column_sep = ',' if os.path.splitext(fpath)[1] == '.csv' else '\t'
+        self._data.to_csv(fpath, sep=column_sep, index=True)

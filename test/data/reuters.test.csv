@@ -1,4 +1,4 @@
-id,document_date,people,orgs,places,exchanges,topics,title,text
+article_id,document_date,people,orgs,places,exchanges,topics,title,body
 14826, 8-APR-1987 01:03:47.52,,,hong-kong|usa|japan|taiwan|malaysia|south-korea|australia,,trade,ASIAN EXPORTERS FEAR DAMAGE FROM U.S.-JAPAN RIFT,"Mounting trade friction between the
 U.S. And Japan has raised fears among many of Asia's exporting
 nations that the row could inflict far-reaching economic

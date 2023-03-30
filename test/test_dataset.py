@@ -12,27 +12,31 @@ def datadir():
     return pathlib.Path(__file__).parent.resolve() / 'data'
 
 @pytest.fixture(scope='class')
-def imdb_train(datadir):
-    return DatasetSplit.load(datadir/"imdb.train.tsv")
-
-@pytest.fixture(scope='class')
 def imdb_test(datadir):
-    return DatasetSplit.load(datadir/"imdb.test.tsv")
+    return DatasetSplit.load(datadir/"imdb.test.tsv", label_column='sentiment')
 
 @pytest.fixture(scope='class')
 def imdb_test_lem(datadir):
-    ds = DatasetSplit.load(datadir/"imdb.test.tsv")
+    ds = DatasetSplit.load(datadir/"imdb.test.tsv", label_column='sentiment')
     hs_dic = os.path.join(datadir, 'en_US')
     ds.lemmatize(hs_dic)
     return ds
 
 @pytest.fixture(scope='class')
 def reuters_train(datadir):
-    return DatasetSplit.load(datadir/"reuters.train.csv", label_column='topics', label_sep='|')
+    return DatasetSplit.load(datadir/"reuters.train.csv",
+                             id_column='article_id',
+                             text_columns=['title', 'body'],
+                             label_column='topics',
+                             label_sep='|')
 
 @pytest.fixture(scope='class')
 def reuters_test(datadir):
-    return DatasetSplit.load(datadir/"reuters.test.csv", label_column='topics', label_sep='|')
+    return DatasetSplit.load(datadir/"reuters.test.csv",
+                             id_column='article_id',
+                             text_columns=['title', 'body'],
+                             label_column='topics',
+                             label_sep='|')
 
 
 class TestDatasetSplit:
@@ -57,7 +61,7 @@ class TestDatasetSplit:
         # reuters (multilabel)
         assert type(reuters_test.texts) == list
         assert len(reuters_test.texts) == 1000
-        assert len(reuters_test.texts[0]) == 4425        
+        assert len(reuters_test.texts[0]) == 4474        
 
     def test_lemmatized_texts(self, imdb_test, imdb_test_lem):
         assert type(imdb_test_lem.lemmatized_texts) == list
@@ -108,9 +112,6 @@ class TestDatasetSplit:
         # reuters (multilabel)
         assert reuters_test.is_multilabel == True
         
-    def test_label_columns(self, imdb_test):
-        assert imdb_test.label_columns == ['sentiment']
-
     def test_label_column(self, imdb_test, reuters_test):
         # imdb (multiclass)
         assert imdb_test.label_column == 'sentiment'
@@ -127,6 +128,7 @@ class TestDatasetSplit:
         assert len(splits['test'].ids) == 100
         assert len(splits['dev'].ids) == 100
         assert len(set(splits['train'].ids + splits['test'].ids + splits['dev'].ids)) == 1000
+        assert splits['train'].ids[0].startswith('r')
         # reuters (multilabel)
         splits = reuters_test.split(['train', 'test', 'dev'], [0.8, 0.1, 0.1])
         assert type(splits) == Dataset
@@ -135,5 +137,4 @@ class TestDatasetSplit:
         assert len(splits['train'].ids) == 800
         assert len(splits['test'].ids) == 100
         assert len(splits['dev'].ids) == 100
-        assert len(set(splits['train'].ids + splits['test'].ids + splits['dev'].ids)) == 1000 
-        
+        assert len(set(splits['train'].ids + splits['test'].ids + splits['dev'].ids)) == 1000
