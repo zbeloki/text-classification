@@ -1,6 +1,8 @@
 from classification.dataset import Dataset, DatasetSplit
 
+import pandas as pd
 import numpy as np
+import datasets
 
 import pytest
 import pathlib
@@ -40,7 +42,24 @@ def reuters_test(datadir):
 
 
 class TestDatasetSplit:
-    
+
+    def test_decide_columns(self):
+        df = pd.DataFrame({'IDS': [], 'texts': [], 'text_body': [], 'topic_label': [], 'other': []})
+        idc, textc, labelc = DatasetSplit._decide_columns(df.columns, None, None, None)
+        assert (idc, textc, labelc) == ('IDS', ['texts', 'text_body'], 'topic_label')
+        df = pd.DataFrame({'codes': [], 'title': [], 'body': [], 'sentiment': []})
+        idc, textc, labelc = DatasetSplit._decide_columns(df.columns, 'codes', ['body'], 'sentiment')
+        assert (idc, textc, labelc) == ('codes', ['body'], 'sentiment')
+        with pytest.raises(RuntimeError):
+            df = pd.DataFrame({'codes': [], 'text': [], 'labels': []})
+            DatasetSplit._decide_columns(df.columns, None, None, None)
+        with pytest.raises(RuntimeError):
+            df = pd.DataFrame({'ids': [], 'test': [], 'labels': []})
+            DatasetSplit._decide_columns(df.columns, 'ids', None, 'labels')
+        with pytest.raises(ValueError):
+            df = pd.DataFrame({'ids': [], 'test': [], 'labels': []})
+            DatasetSplit._decide_columns(df.columns, 'id', ['test'], 'labels')
+           
     def test_ids(self, imdb_test, reuters_test):
         # imdb (multiclass)
         assert type(imdb_test.ids) == list
@@ -118,12 +137,47 @@ class TestDatasetSplit:
         # reuters (multilabel)
         assert reuters_test.label_column == 'topics'
 
+    def test_to_hf(self, imdb_test, reuters_test):
+        # imdb (multiclass)
+        ds = imdb_test.to_hf()
+        assert ds.features.keys() == set(['id', 'text', 'labels'])
+        assert ds.features['id'] == datasets.Value(dtype='string')
+        assert ds.features['text'] == datasets.Value(dtype='string')
+        assert ds.features['labels'] == datasets.Value(dtype='string')
+        assert len(ds) == 1000
+        assert ds['id'][0] == 'r30773'
+        assert len(ds['text'][0]) == 897
+        assert ds['labels'][0] == 'negative'
+        # reuters (multilabel)
+        ds = reuters_test.to_hf()
+        assert ds.features.keys() == set(['id', 'text', 'labels'])
+        assert ds.features['id'] == datasets.Value(dtype='string')
+        assert ds.features['text'] == datasets.Value(dtype='string')
+        assert ds.features['labels'] == datasets.Sequence(feature=datasets.Value(dtype='string'))
+        assert len(ds) == 1000
+        assert ds['id'][0] == '14826'
+        assert len(ds['text'][0]) == 4474
+        assert ds['labels'][0] == ['trade']
+
+    def test_clean_texts(self):
+        body_html = "The U.S. has said it will impose <span><i>300 mln</i> dlrs </span>of tariffs on imports of Japanese electronics goods on <span>April 17</span>, in retaliation for Japan's alleged failure to stick to a pact not to sell semiconductors<br/><br/>on world markets at below cost."
+        body_clean = "The U.S. has said it will impose 300 mln dlrs of tariffs on imports of Japanese electronics goods on April 17 , in retaliation for Japan's alleged failure to stick to a pact not to sell semiconductors on world markets at below cost."
+        ds = DatasetSplit(pd.DataFrame({
+            'id': ['1'],
+            'text_title': ["<h1>ASIAN EXPORTERS FEAR DAMAGE FROM U.S.</h1>"],
+            'text_body': [body_html],
+            'label': ['0'],
+        }))
+        ds.clean_texts()
+        assert ds._data['text_title'][0] == "ASIAN EXPORTERS FEAR DAMAGE FROM U.S."
+        assert ds._data['text_body'][0] == body_clean
+
     def test_split(self, imdb_test, reuters_test):
         # imdb (multiclass)
         splits = imdb_test.split(['train', 'test', 'dev'], [0.8, 0.1, 0.1])
         assert type(splits) == Dataset
         assert len(splits) == 3
-        assert set(splits.keys()) == set(['train', 'test', 'dev'])
+        assert splits.keys() == set(['train', 'test', 'dev'])
         assert len(splits['train'].ids) == 800
         assert len(splits['test'].ids) == 100
         assert len(splits['dev'].ids) == 100
@@ -133,7 +187,7 @@ class TestDatasetSplit:
         splits = reuters_test.split(['train', 'test', 'dev'], [0.8, 0.1, 0.1])
         assert type(splits) == Dataset
         assert len(splits) == 3
-        assert set(splits.keys()) == set(['train', 'test', 'dev'])
+        assert splits.keys() == set(['train', 'test', 'dev'])
         assert len(splits['train'].ids) == 800
         assert len(splits['test'].ids) == 100
         assert len(splits['dev'].ids) == 100
