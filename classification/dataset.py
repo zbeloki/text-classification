@@ -123,7 +123,9 @@ class DatasetSplit:
                     id_column = col
                     break
             if id_column is None:
-                raise ValueError("Could not infer the column for IDs. Provide 'id_column'.")
+                raise RuntimeError("Could not infer the column for IDs. Provide 'id_column'.")
+        elif id_column not in columns:
+            raise ValueError(f"Column '{id_column}' provided in id_column doesn't exist")
             
         if text_columns is None:
             text_columns = []
@@ -131,7 +133,11 @@ class DatasetSplit:
                 if 'text' in col.lower():
                     text_columns.append(col)
             if len(text_columns) == 0:
-                raise ValueError("Could not infer the column(s) for texts. Provide 'text_columns'.")
+                raise RuntimeError("Could not infer the column(s) for texts. Provide 'text_columns'.")
+        else:
+            for col in text_columns:
+                if col not in columns:
+                    raise ValueError(f"Column '{col}' provided in text_columns doesn't exist")
             
         if label_column is None:
             for col in columns:
@@ -139,8 +145,10 @@ class DatasetSplit:
                     label_column = col
                     break
             if label_column is None:
-                raise ValueError("Could not infer the column for labels. Provide 'label_column'.")
-
+                raise RuntimeError("Could not infer the column for labels. Provide 'label_column'.")
+        elif label_column not in columns:
+            raise ValueError(f"Column '{label_column}' provided in label_column doesn't exist")
+            
         return id_column, text_columns, label_column
 
     @property
@@ -182,8 +190,7 @@ class DatasetSplit:
 
     @property
     def is_multilabel(self):
-        labels = self.labels
-        return False if len(labels) == 0 else type(self.labels[0]) == list
+        return False if len(self.labels) == 0 else type(self.labels[0]) == list
 
     @property
     def label_column(self):
@@ -191,8 +198,13 @@ class DatasetSplit:
 
     def to_hf(self):
         ds = datasets.Dataset.from_pandas(self._data)
-        ds = ds.rename_column(self._labelc, 'labels')
-        ds = ds.cast_column('labels', datasets.Sequence(datasets.Value(dtype='string', id=None)))
+        ds = ds.add_column('__text__', self.texts)
+        ds = ds.remove_columns([ col for col in ds.features.keys() if col not in ['__text__', self._idc, self._labelc] ])
+        ds = ds.rename_column('__text__', 'text')
+        if self._idc != 'id':
+            ds = ds.rename_column(self._idc, 'id')
+        if self._labelc != 'labels':
+            ds = ds.rename_column(self._labelc, 'labels')
         return ds
 
     def clean_texts(self):
