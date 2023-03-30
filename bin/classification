@@ -11,14 +11,21 @@ import pdb
 
 def train_svm(args):
     dataset = _load_dataset(args)
-    classifier = SVMClassifier.train(dataset['train'], dataset['test'], n_trials=args.trials, n_jobs=args.jobs)
+    if args.oversample:
+        dataset['train'].oversample()
+    classifier = SVMClassifier.train(dataset['train'], dataset['dev'], n_trials=args.trials, f_beta=args.f_beta, top_k=args.top_k, n_jobs=args.jobs)
     classifier.save(args.out)
 
 def train_transformer(args):
     pass
 
 def evaluate(args):
-    pass
+
+    test = DatasetSplit.load(args.test)
+    test.binarize_labels()  # @: binarize!
+    model = SVMClassifier.load(args.model)
+    metrics = model.evaluate(test, args.f_beta, args.top_k)
+    print(metrics)
 
 def clean_dataset(args):
     
@@ -106,6 +113,7 @@ if __name__ == '__main__':
     parser_dataset_lemmatize = subparsers_dataset.add_parser('lemmatize')
     parser_dataset_lemmatize.add_argument(
         '--hunspell',
+        required=True,
         help="")
     parser_dataset_clean = subparsers_dataset.add_parser('clean')
     parser_dataset_split = subparsers_dataset.add_parser('split')
@@ -143,6 +151,10 @@ if __name__ == '__main__':
         '--dev',
         help="Dev dataset split")    
     parser_train.add_argument(
+        '--oversample',
+        action='store_true',
+        help="Whether to oversample the trainset or not")
+    parser_train.add_argument(
         '--mode',
         default='auto',
         help="Classification setting: 'multilabel', 'multiclass', 'auto', None")        
@@ -151,6 +163,15 @@ if __name__ == '__main__':
         type=int,
         default=0,
         help="Number of trials for hyperparameter tuning in addition to the one with default hyperparameters")    
+    parser_train.add_argument(
+        '--f_beta',
+        type=float,
+        default=1.0,
+        help="The beta value for F{beta}-score, used to evaluate the model")    
+    parser_train.add_argument(
+        '--top_k',
+        action='store_true',
+        help="Whether to use top_k or not. It learns top_k as a hyperparameter.")
     parser_train.add_argument(
         "--out",
         required=True,
@@ -172,6 +193,24 @@ if __name__ == '__main__':
     parser_train_trans = subparsers_train.add_parser('transformer')
     
     parser_evaluate = subparsers.add_parser('evaluate')
+    parser_evaluate.add_argument(
+        '--model',
+        required=True,
+        help="The pretrained model to evaluate")
+    parser_evaluate.add_argument(
+        '--test',
+        required=True,
+        help="The dataset split for testing")
+    parser_evaluate.add_argument(
+        '--f_beta',
+        type=float,
+        default=1.0,
+        help="Beta value of the F{beta} score")    
+    parser_evaluate.add_argument(
+        '--top_k',
+        type=int,
+        help="tok_k value to use when evaluating the model")    
+
     parser_classify = subparsers.add_parser('classify')
 
     args = parser.parse_args()
@@ -187,3 +226,6 @@ if __name__ == '__main__':
     elif args.action == 'train':
         if args.model == 'svm':
             train_svm(args)
+
+    elif args.action == 'evaluate':
+        evaluate(args)
