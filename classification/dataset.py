@@ -107,8 +107,9 @@ class DatasetSplit:
             self._label_column = LABEL_COLUMN
 
     @staticmethod
-    def load(tsv_fpath, label_column=None, sep=None):
-        df = pd.read_csv(tsv_fpath, sep='\t', keep_default_na=False, dtype=str)
+    def load(tsv_fpath, label_column=None, label_sep=None):
+        column_sep = ',' if os.path.splitext(tsv_fpath)[1] == '.csv' else '\t'
+        df = pd.read_csv(tsv_fpath, sep=column_sep, keep_default_na=False, dtype=str)
         if ID_COLUMN not in df.columns or TEXT_COLUMN not in df.columns:
             raise KeyError(f"Column '{ID_COLUMN}' or '{TEXT_COLUMN}' not found in {tsv_fpath}")
         if label_column is not None and label_column not in df.columns:
@@ -122,10 +123,10 @@ class DatasetSplit:
             label_column_ = label_columns[0] if len(label_columns) == 1 else LABEL_COLUMN
         if label_column_ not in label_columns:
             raise ValueError("Label column not set and multiple label columns found, but none of them is called 'labels'. Please specify the label_column.")
-        if sep is not None:
+        if label_sep is not None:
             for col in label_columns:
                 pd.options.mode.chained_assignment = None # avoid warning
-                labels[col] = labels[col].str.split(sep)
+                labels[col] = labels[col].str.split(label_sep)
                 # filter out empty-strings from labels
                 labels[col] = labels[col].map(lambda ls: list(filter(lambda e: e != "", ls)))
         return DatasetSplit(ids.tolist(), texts.tolist(), labels.to_dict('list'), label_column)
