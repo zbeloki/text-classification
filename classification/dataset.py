@@ -145,29 +145,40 @@ class DatasetSplit:
 
     @property
     def ids(self):
-        return self._data.index.to_numpy()
+        return self._data.index.tolist()
     
     @property
-    def X(self):
-        column = LEM_COLUMN if LEM_COLUMN in self._data.columns else TEXT_COLUMN
-        return self._data[column].to_numpy()
-
-    @property
     def texts(self):
-        return self._data[TEXT_COLUMN].to_numpy()
+        return self._data[TEXT_COLUMN].tolist()
 
     @property
     def lemmatized_texts(self):
         if LEM_COLUMN not in self._data.columns:
             raise RuntimeError("Dataset is not lemmatized")
-        return self._data[TEXT_COLUMN].to_numpy()
+        return self._data[LEM_COLUMN].tolist()
+
+    @property
+    def X(self):
+        column = LEM_COLUMN if LEM_COLUMN in self._data.columns else TEXT_COLUMN
+        return self._data[column].tolist()
+
+    @property
+    def labels(self):
+        return self._data[self.label_column].tolist()
 
     @property
     def y(self):
-        if self._y is None:
-            raise RuntimeError("Dataset labels are not binarized")
-        return self._y
+        return self.labels
 
+    @property
+    def is_multilabel(self):
+        labels = self.labels
+        return False if len(labels) == 0 else type(self.labels[0]) == list
+
+    @property
+    def label_columns(self):
+        return [ col for col in self._data.columns if col not in [ID_COLUMN, TEXT_COLUMN, LEM_COLUMN] ]
+    
     @property
     def label_column(self):
         col = self._label_column
@@ -179,20 +190,6 @@ class DatasetSplit:
         if col not in self._data.columns:
             raise KeyError(f"Label column '{col}' not found")
         return col
-
-    @property
-    def label_columns(self):
-        return [ col for col in self._data.columns if col not in [ID_COLUMN, TEXT_COLUMN, LEM_COLUMN] ]
-    
-    @property
-    def labels(self):
-        return self._data[self.label_column].to_numpy().tolist()
-
-    @property
-    def n_classes(self):
-        if self._y is None:
-            raise RuntimeError("Dataset labels are not binarized")
-        return self._y.shape[1]
 
     def to_hf(self):
         columns = [ID_COLUMN, TEXT_COLUMN, self.label_column]

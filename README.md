@@ -5,3 +5,4 @@ Todo:
 - Pass raw labels to sklearn instead of 2D indicator matrix, as it uses multilabel setting otherwise.
 - Implement TransformerClassifier
 - Don't use/save custom binarizers: sklearn OneVSRestClassifier keep an internal binarizer and transformers use a different binarizer inside config
+- Make dataset original format flexible?: sep, text column name, id column name ...

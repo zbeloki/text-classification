@@ -3,6 +3,8 @@ hunspell
 nltk
 optuna
 pandas
+pytest
+pytest-datadir
 scikit-learn
 scikit-multilearn
 tqdm
