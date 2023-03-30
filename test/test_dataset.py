@@ -76,3 +76,14 @@ class TestDatasetSplit:
     def test_label_column(self, imdb_test):
         assert imdb_test.label_column == 'sentiment'
 
+    def test_split(self, imdb_test):
+        # multiclass
+        splits = imdb_test.split(['train', 'test', 'dev'], [0.8, 0.1, 0.1])
+        assert type(splits) == Dataset
+        assert len(splits) == 3
+        assert set(splits.keys()) == set(['train', 'test', 'dev'])
+        assert len(splits['train'].ids) == 800
+        assert len(splits['test'].ids) == 100
+        assert len(splits['dev'].ids) == 100
+        assert len(set(splits['train'].ids + splits['test'].ids + splits['dev'].ids)) == 1000 
+        # multilabel
