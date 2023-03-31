@@ -9,25 +9,22 @@ import os
 import json
 import pdb
 
-logging.basicConfig(level=logging.INFO)
 
 class Classifier(ABC):
     
-    def __init__(self, model, config):
-        self._model = model
+    def __init__(self, config, label_binarizer):
         self._config = config
+        self._label_binarizer = label_binarizer
 
-
-    # PUBLIC ABSTRACT methods
+    # ABSTRACT methods
     
     @staticmethod
     @classmethod
     def train(cls, train_split, dev_split=None, n_trials=0, f_beta=1, top_k=False, *args, **kwargs):
         pass
 
-    @staticmethod
     @abstractmethod
-    def predict_probabilities(texts, model):
+    def predict_probabilities(self, texts):
         pass
 
     @classmethod
@@ -35,8 +32,17 @@ class Classifier(ABC):
     def load(cls, path):
         pass
 
-    
-    # PUBLIC methods
+    @staticmethod
+    @abstractmethod
+    def _default_hyperparameters(top_k=False):
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def _sample_hyperparameters(trial, top_k=False):
+        pass    
+
+    # methods
     
     @classmethod
     def cross_validate(cls, dataset, n_folds=5, beta=1, *args, **kwargs):
@@ -52,40 +58,25 @@ class Classifier(ABC):
         return metrics
 
     def classify(self, texts, threshold=0.5):
-        y_pred = self.predict_probabilities(texts, self._model)
-        return y_pred
+        y_proba = self.predict_probabilities(texts)
+        return y_proba
 
     def evaluate(self, test_split, beta=1, top_k=None):
-        return self._evaluate_model(test_split, self._model, beta, top_k)
-
-    def _load(self, path):
-        self._config = Config.load(path)
+        X, y = test_split.X, test_split.y(self._label_binarizer)
+        y_proba = self.predict_probabilities(X)
+        return self._evaluate_probabilities(y, y_proba, beta, top_k)
 
     def save(self, path):
         if not os.path.exists(path):
             os.makedirs(path)
         self._config.save(path)
+        # save: self._label_binarizer
 
-        
-    # PROTECTED ABSTRACT methods
-
-    @staticmethod
-    @abstractmethod
-    def _default_hyperparameters(top_k=False):
-        pass
-
-    @staticmethod
-    @abstractmethod
-    def _sample_hyperparameters(trial, top_k=False):
-        pass    
-
-    
-    # PROTECTED methods
-        
-    @classmethod
-    def _evaluate_model(cls, test_split, model, beta=1, top_k=None):
-        probas = cls.predict_probabilities(test_split.X, model)
-        return cls._evaluate_probabilities(test_split.y, probas, beta, top_k)
+    def _load(self, path):
+        return {
+            'config': Config.load(path),
+            # 'label_binarizer': ...,
+        }
 
     @classmethod
     def _evaluate_logits(cls, y_true, logits, is_multilabel, beta=1, top_k=None):

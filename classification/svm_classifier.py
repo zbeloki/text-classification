@@ -9,6 +9,7 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.exceptions import ConvergenceWarning
 
 import optuna
+import numpy as np
 
 import joblib
 import json
@@ -18,23 +19,23 @@ import warnings
 
 class SVMClassifier(Classifier):
 
-    def __init__(self, model, config):
-        super().__init__(model, config)
+    def __init__(self, config, label_binarizer, model):
+        super().__init__(config, label_binarizer)
+        self._model = model
 
     @classmethod
-    def train(cls, train_split, dev_split=None, n_trials=0, f_beta=1, top_k=False, **kwargs):
-        n_jobs = kwargs['n_jobs']
+    def train(cls, train_split, dev_split=None, n_trials=0, f_beta=1, top_k=False, n_jobs=1, **kwargs):
         config = Config.from_dict(kwargs)
 
         params = cls._default_hyperparameters(top_k)
-        model, metrics = cls._training_trial(params, train_split, dev_split, n_jobs, f_beta)
+        model, lb, metrics = cls._training_trial(params, train_split, dev_split, n_jobs, f_beta)
         print(f"Default hyperparameters: {metrics}")
 
         if n_trials > 0:
             
             def objective(trial):
                 params = cls._sample_hyperparameters(trial, top_k)
-                _, metrics = cls._training_trial(params, train_split, dev_split, n_jobs, f_beta)
+                _, _, metrics = cls._training_trial(params, train_split, dev_split, n_jobs, f_beta)
                 return metrics['f']
 
             warnings.filterwarnings(action='ignore', category=ConvergenceWarning)
@@ -42,9 +43,9 @@ class SVMClassifier(Classifier):
             study.optimize(objective, n_trials=n_trials)
 
             params = study.best_params
-            model, metrics = cls._training_trial(params, train_split, dev_split, n_jobs, f_beta)
+            model, lb, metrics = cls._training_trial(params, train_split, dev_split, n_jobs, f_beta)
 
-        return SVMClassifier(model, config)
+        return SVMClassifier(config, lb, model)
 
     @classmethod
     def _training_trial(cls, params, train_split, dev_split=None, n_jobs=1, f_beta=1):
@@ -58,18 +59,23 @@ class SVMClassifier(Classifier):
             ('tfidf', tfidf_vectorizer),
             ('model', estimator),
         ])
-        pipe.fit(train_split.X, train_split.y)
+
+        lb = train_split.create_label_binarizer()
+        X, y = train_split.X, train_split.y(lb)
+        if min(np.sum(y, axis=0)) < 2:
+            raise ValueError("CalibratedClassifierCV needs at least 2 examples from each class")
+
+        pipe.fit(X, y)
 
         if dev_split is None:
             dev_split = train_split
-        metrics = cls._evaluate_model(dev_split, pipe, f_beta, params['top_k'])
+        metrics = SVMClassifier(None, lb, pipe).evaluate(dev_split, f_beta, params['top_k'])
 
-        return pipe, metrics
+        return pipe, lb, metrics
 
-    @staticmethod
-    def predict_probabilities(texts, estimator):
-        probas = estimator.predict_proba(texts)
-        return probas
+    def predict_probabilities(self, texts):
+        y_proba = self._model.predict_proba(texts)
+        return y_proba
 
     @staticmethod
     def _default_hyperparameters(top_k=False):
@@ -97,15 +103,11 @@ class SVMClassifier(Classifier):
 
     @classmethod
     def load(cls, path):
-        classifier = SVMClassifier(None, None, None)
-        classifier._load(path)
-        return classifier
-    
-    def _load(self, path):
-        super().load(path)
+        kwargs = cls._load(path)
         fname = "svm.joblib"
-        self._model = joblib.load(os.path.join(path, fname))
-
+        model = joblib.load(os.path.join(path, fname))
+        return SVMClassifier(model=model, **kwargs)
+    
     def save(self, path):
         super().save(path)
         fpath = os.path.join(path, "svm.joblib")
