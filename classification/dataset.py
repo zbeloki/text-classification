@@ -8,11 +8,10 @@ import pandas as pd
 import numpy as np
 import datasets
 
-import itertools
+from collections.abc import MutableMapping
 import logging
 import pdb
 import os
-from collections.abc import MutableMapping
 
 LEM_SUFFIX = '_lem'
 
@@ -154,7 +153,6 @@ class DatasetSplit:
         try:
             return self.lemmatized_texts
         except RuntimeError:
-            # warning
             return self.texts
 
     @property

@@ -1,17 +1,8 @@
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.svm import LinearSVC
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.multiclass import OneVsRestClassifier
-from sklearn.pipeline import Pipeline
-
-import optuna
-import pandas as pd
 import numpy as np
 import hunspell  # libhunspell-dev
 from nltk.tokenize import RegexpTokenizer
 import tqdm
 
-import warnings
 import re
 import pdb
 
