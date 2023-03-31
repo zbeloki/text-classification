@@ -218,8 +218,8 @@ class DatasetSplit:
             self._data.insert(text_idx+1, col+LEM_SUFFIX, lemmatized)
 
     def oversample(self, target_f=np.average):
-        _, _, ids = utils.oversample(self.texts, self._binarize_labels(), self.ids, target_f)
-        self._data = self._data.loc[ids]
+        _, _, ids = utils.oversample(self.texts, self._binarize_labels(), target_f)
+        self._data = self._data.iloc[ids]
 
     def split(self, names, sizes):
         if len(names) != len(sizes):
