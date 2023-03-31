@@ -160,16 +160,26 @@ class DatasetSplit:
         return self._data[self._labelc].tolist()
 
     @property
-    def y(self):
-        return self.labels
-
-    @property
     def is_multilabel(self):
         return False if len(self.labels) == 0 else type(self.labels[0]) == list
 
     @property
     def label_column(self):
         return self._labelc
+
+    def y(self, label_binarizer=None):
+        if label_binarizer is None:
+            label_binarizer = self.create_label_binarizer()
+        y = label_binarizer.transform(self.labels)
+        if len(label_binarizer.classes_) == 2:
+            # force one-hot encoding if binary classification, as LabelBinarizer encodes in 1D
+            y = np.array([ (1, 0) if l == 0 else (0, 1) for l in y ])
+        return y
+
+    def create_label_binarizer(self):
+        label_binarizer = MultiLabelBinarizer() if self.is_multilabel else LabelBinarizer()
+        label_binarizer.fit(self.labels)
+        return label_binarizer
 
     def to_hf(self):
         ds = datasets.Dataset.from_pandas(self._data)
@@ -193,7 +203,7 @@ class DatasetSplit:
             self._data.insert(text_idx+1, col+LEM_SUFFIX, lemmatized)
 
     def oversample(self, target_f=np.average):
-        _, _, ids = utils.oversample(self.texts, self._binarize_labels(), target_f)
+        _, _, ids = utils.oversample(self.texts, self.y(), target_f)
         self._data = self._data.iloc[ids]
 
     def split(self, names, sizes):
@@ -207,8 +217,7 @@ class DatasetSplit:
         else:
             split_f = lambda X, y, size: train_test_split(X, y, test_size=size, stratify=np.argmax(y, axis=1))
 
-        y = self._binarize_labels()
-        rem_inds = np.array(range(len(self.y)))
+        rem_inds = np.array(range(len(self.y())))
 
         specs = [ (name, size) for name, size in zip(names, sizes) if size > 0.0 ]
         splits = {}
@@ -217,7 +226,7 @@ class DatasetSplit:
                 split_inds = rem_inds
             else:
                 size = split_size / (len(rem_inds) / len(self._data.index))
-                res = split_f(rem_inds.reshape((-1,1)), y[rem_inds,:], 1.0-size)
+                res = split_f(rem_inds.reshape((-1,1)), self.y()[rem_inds,:], 1.0-size)
                 split_inds = res[0].squeeze()
                 rem_inds = np.array([ idx for idx in rem_inds if idx not in split_inds ])
             splits[split_name] = self._build_from_indices(split_inds)
@@ -226,7 +235,7 @@ class DatasetSplit:
 
     def kfold(self, k):
         kfold = KFold(n_splits=k, shuffle=True)
-        for i, (train_index, test_index) in enumerate(kfold.split(self.y)):
+        for i, (train_index, test_index) in enumerate(kfold.split(self.y())):
             train_split = self._build_from_indices(train_index)
             test_split = self._build_from_indices(test_index)
             yield i, (train_split, test_split)
@@ -235,14 +244,6 @@ class DatasetSplit:
         data = self._data.iloc[indices]
         return DatasetSplit(data.reset_index(), id_column=self._idc, text_columns=self._textc,
                             label_column=self._labelc)
-
-    def _binarize_labels(self):
-        lb = MultiLabelBinarizer() if self.is_multilabel else LabelBinarizer()
-        y = lb.fit_transform(self.labels)
-        if len(lb.classes_) == 2:
-            # force one-hot encoding if binary classification, as LabelBinarizer encodes in 1D
-            y = np.array([ (1, 0) if l == 0 else (0, 1) for l in y ])
-        return y
 
     def save(self, fpath, label_sep='|', override=False):
         if not override and os.path.isfile(fpath):

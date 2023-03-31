@@ -112,16 +112,16 @@ class TestDatasetSplit:
         
     def test_y(self, imdb_test, toxic_test):
         # imdb (binary multiclass)
-        assert type(imdb_test.y) == list
-        assert len(imdb_test.y) == 20
-        assert type(imdb_test.y[0]) == str
-        assert imdb_test.y[0] == 'negative'
+        assert type(imdb_test.y()) == np.ndarray
+        assert len(imdb_test.y()) == 20
+        assert type(imdb_test.y()[0]) == np.ndarray
+        assert np.allclose(imdb_test.y()[0], [1, 0])
         # toxic (multilabel)
-        assert type(toxic_test.y) == list
-        assert len(toxic_test.y) == 20
-        assert type(toxic_test.y[0]) == list
-        assert type(toxic_test.y[4][0]) == str
-        assert set(toxic_test.y[4]) == set(['toxic', 'obscene', 'insult'])
+        assert type(toxic_test.y()) == np.ndarray
+        assert len(toxic_test.y()) == 20
+        assert type(toxic_test.y()[0]) == np.ndarray
+        assert type(toxic_test.y()[4][0]) == np.int64
+        assert np.allclose(toxic_test.y()[4], [0, 1, 1, 0, 1])
         
     def test_is_multilabel(self, imdb_test, toxic_test):
         # imdb (binary multiclass)
