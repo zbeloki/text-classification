@@ -10,86 +10,21 @@ import tempfile
 import os
 import pdb
 
-@pytest.fixture(scope='session')
-def datadir():
-    return pathlib.Path(__file__).parent.resolve() / 'data'
-
-@pytest.fixture(scope='session')
-def hunspell(datadir):
-    return os.path.join(datadir, 'en_US')
-
-@pytest.fixture(scope='class')
-def imdb(datadir):
-    return Dataset.load({
-        'train': datadir/"imdb.train.tsv",
-        'test': datadir/"imdb.test.tsv",
-    }, label_column='sentiment')
-
-@pytest.fixture(scope='class')
-def imdb_test_only(datadir):
-    return Dataset.load({
-        'test': datadir/"imdb.test.tsv",
-    }, label_column='sentiment')
-
-@pytest.fixture(scope='class')
-def imdb_test(datadir, imdb_test_only):
-    return imdb_test_only['test']
-
-@pytest.fixture(scope='class')
-def imdb_test_lem(datadir, hunspell):
-    ds = DatasetSplit.load(datadir/"imdb.test.tsv", label_column='sentiment')
-    ds.lemmatize(hunspell)
-    return ds
-
-@pytest.fixture(scope='class')
-def reuters_train(datadir):
-    return DatasetSplit.load(datadir/"reuters.train.csv",
-                             id_column='article_id',
-                             text_columns=['title', 'body'],
-                             label_column='topics',
-                             label_sep='|')
-
-@pytest.fixture(scope='class')
-def reuters_test(datadir):
-    return DatasetSplit.load(datadir/"reuters.test.csv",
-                             id_column='article_id',
-                             text_columns=['title', 'body'],
-                             label_column='topics',
-                             label_sep='|')
-
-@pytest.fixture(scope='function')
-def small_mc():
-    return DatasetSplit(pd.DataFrame({
-        'id': ['1', '2', '3', '4', '5', '6', '7', '8', '9'],
-        'text': ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'],
-        'labels': ['A', 'B', 'B', 'C', 'C', 'C', 'C', 'C', 'C'],
-        # A:1, B:2, C:6
-    }))
-
-@pytest.fixture(scope='function')
-def small_ml():
-    return DatasetSplit(pd.DataFrame({
-        'id': ['1', '2', '3', '4', '5', '6', '7'],
-        'text': ['one', 'two', 'three', 'four', 'five', 'six', 'seven'],
-        'labels': [['A', 'B'], ['B'], ['B', 'A', 'C'], ['A'], ['A', 'B'], ['B'], ['C']],
-        # A:4, B:5, C:2
-    }))
-
 class TestDataset:
 
     def test_load(self, imdb):
-        assert imdb.keys() == set(['train', 'test'])
-        assert len(imdb['test'].ids) == 1000
+        assert imdb.keys() == set(['train', 'test', 'dev'])
+        assert len(imdb['test'].ids) == 20
 
     def test_clean_texts(self, imdb):
         assert '<br />' in imdb['test'].texts[3]
         imdb.clean_texts()
         assert '<br />' not in imdb['test'].texts[3]
 
-    def test_lemmatize(self, imdb_test_only, hunspell):
-        assert len(imdb_test_only['test'].X[0]) == 897
-        imdb_test_only.lemmatize(hunspell)
-        assert len(imdb_test_only['test'].X[0]) == 807
+    def test_lemmatize(self, imdb_func, hunspell):
+        assert len(imdb_func['test'].X[0]) == 897
+        imdb_func.lemmatize(hunspell)
+        assert len(imdb_func['test'].X[0]) == 807
 
     def test_save(self, imdb):
         with tempfile.TemporaryDirectory() as path:
@@ -121,104 +56,106 @@ class TestDatasetSplit:
             df = pd.DataFrame({'ids': [], 'test': [], 'labels': []})
             DatasetSplit._decide_columns(df.columns, 'id', ['test'], 'labels')
            
-    def test_ids(self, imdb_test, reuters_test):
-        # imdb (multiclass)
+    def test_ids(self, imdb_test, toxic_test):
+        # imdb (binary multiclass)
         assert type(imdb_test.ids) == list
-        assert len(imdb_test.ids) == 1000
+        assert len(imdb_test.ids) == 20
         assert type(imdb_test.ids[0]) == str
         assert imdb_test.ids[0] == 'r30773'
-        # reuters (multilabel)
-        assert type(reuters_test.ids) == list
-        assert len(reuters_test.ids) == 1000
-        assert type(reuters_test.ids[0]) == str
-        assert reuters_test.ids[0] == '14826'        
+        # toxic (multilabel)
+        assert type(toxic_test.ids) == list
+        assert len(toxic_test.ids) == 20
+        assert type(toxic_test.ids[0]) == str
+        assert toxic_test.ids[0] == '6728190ab6bb7bb0'        
 
-    def test_texts(self, imdb_test, reuters_test):
-        # imdb (multiclass)
+    def test_texts(self, imdb_test, toxic_test):
+        # imdb (binary multiclass)
         assert type(imdb_test.texts) == list
-        assert len(imdb_test.texts) == 1000
+        assert len(imdb_test.texts) == 20
         assert len(imdb_test.texts[0]) == 897
-        # reuters (multilabel)
-        assert type(reuters_test.texts) == list
-        assert len(reuters_test.texts) == 1000
-        assert len(reuters_test.texts[0]) == 4474        
+        # toxic (multilabel)
+        assert type(toxic_test.texts) == list
+        assert len(toxic_test.texts) == 20
+        assert len(toxic_test.texts[0]) == 1485        
 
-    def test_lemmatized_texts(self, imdb_test, imdb_test_lem):
+    def test_lemmatized_texts(self, imdb_test, imdb_lem):
+        imdb_test_lem = imdb_lem['test']
         assert type(imdb_test_lem.lemmatized_texts) == list
-        assert len(imdb_test_lem.lemmatized_texts) == 1000
+        assert len(imdb_test_lem.lemmatized_texts) == 20
         assert len(imdb_test_lem.lemmatized_texts[0]) == 807
         with pytest.raises(RuntimeError):
             imdb_test.lemmatized_texts
 
-    def test_X(self, imdb_test, imdb_test_lem):
+    def test_X(self, imdb_test, imdb_lem):
+        imdb_test_lem = imdb_lem['test']
         # not lemmatized
         assert type(imdb_test.X) == list
-        assert len(imdb_test.X) == 1000
+        assert len(imdb_test.X) == 20
         assert len(imdb_test.X[0]) == 897
         # lemmatized
         assert type(imdb_test_lem.X) == list
-        assert len(imdb_test_lem.X) == 1000
+        assert len(imdb_test_lem.X) == 20
         assert len(imdb_test_lem.X[0]) == 807
 
-    def test_labels(self, imdb_test, reuters_test):
-        # imdb (multiclass)
+    def test_labels(self, imdb_test, toxic_test):
+        # imdb (binary multiclass)
         assert type(imdb_test.labels) == list
-        assert len(imdb_test.labels) == 1000
+        assert len(imdb_test.labels) == 20
         assert type(imdb_test.labels[0]) == str
         assert imdb_test.labels[0] == 'negative'
-        # reuters (multilabel)
-        assert type(reuters_test.labels) == list
-        assert len(reuters_test.labels) == 1000
-        assert type(reuters_test.labels[0]) == list
-        assert type(reuters_test.labels[0][0]) == str
-        assert reuters_test.labels[0][0] == 'trade'
+        # toxic (multilabel)
+        assert type(toxic_test.labels) == list
+        assert len(toxic_test.labels) == 20
+        assert type(toxic_test.labels[0]) == list
+        assert type(toxic_test.labels[4][0]) == str
+        assert set(toxic_test.labels[4]) == set(['toxic', 'obscene', 'insult'])
         
-    def test_y(self, imdb_test, reuters_test):
-        # imdb (multiclass)
+    def test_y(self, imdb_test, toxic_test):
+        # imdb (binary multiclass)
         assert type(imdb_test.y) == list
-        assert len(imdb_test.y) == 1000
+        assert len(imdb_test.y) == 20
         assert type(imdb_test.y[0]) == str
         assert imdb_test.y[0] == 'negative'
-        # reuters (multilabel)
-        assert type(reuters_test.y) == list
-        assert len(reuters_test.y) == 1000
-        assert type(reuters_test.y[0]) == list
-        assert type(reuters_test.y[0][0]) == str
-        assert reuters_test.y[0][0] == 'trade'
+        # toxic (multilabel)
+        assert type(toxic_test.y) == list
+        assert len(toxic_test.y) == 20
+        assert type(toxic_test.y[0]) == list
+        assert type(toxic_test.y[4][0]) == str
+        assert set(toxic_test.y[4]) == set(['toxic', 'obscene', 'insult'])
         
-    def test_is_multilabel(self, imdb_test, reuters_test):
-        # imdb (multiclass)
+    def test_is_multilabel(self, imdb_test, toxic_test):
+        # imdb (binary multiclass)
         assert imdb_test.is_multilabel == False
-        # reuters (multilabel)
-        assert reuters_test.is_multilabel == True
+        # toxic (multilabel)
+        assert toxic_test.is_multilabel == True
         
-    def test_label_column(self, imdb_test, reuters_test):
-        # imdb (multiclass)
+    def test_label_column(self, imdb_test, toxic_test):
+        # imdb (binary multiclass)
         assert imdb_test.label_column == 'sentiment'
-        # reuters (multilabel)
-        assert reuters_test.label_column == 'topics'
+        # toxic (multilabel)
+        assert toxic_test.label_column == 'tags'
 
-    def test_to_hf(self, imdb_test, reuters_test):
-        # imdb (multiclass)
+    def test_to_hf(self, imdb_test, toxic_test):
+        # imdb (binary multiclass)
         ds = imdb_test.to_hf()
         assert ds.features.keys() == set(['id', 'text', 'labels'])
         assert ds.features['id'] == datasets.Value(dtype='string')
         assert ds.features['text'] == datasets.Value(dtype='string')
         assert ds.features['labels'] == datasets.Value(dtype='string')
-        assert len(ds) == 1000
+        assert len(ds) == 20
         assert ds['id'][0] == 'r30773'
         assert len(ds['text'][0]) == 897
         assert ds['labels'][0] == 'negative'
-        # reuters (multilabel)
-        ds = reuters_test.to_hf()
+        # toxic (multilabel)
+        ds = toxic_test.to_hf()
         assert ds.features.keys() == set(['id', 'text', 'labels'])
         assert ds.features['id'] == datasets.Value(dtype='string')
         assert ds.features['text'] == datasets.Value(dtype='string')
         assert ds.features['labels'] == datasets.Sequence(feature=datasets.Value(dtype='string'))
-        assert len(ds) == 1000
-        assert ds['id'][0] == '14826'
-        assert len(ds['text'][0]) == 4474
-        assert ds['labels'][0] == ['trade']
+        assert len(ds) == 20
+        assert ds['id'][0] == '6728190ab6bb7bb0'
+        assert len(ds['text'][0]) == 1485
+        assert ds['labels'][4] == ['toxic', 'obscene', 'insult']
 
     def test_clean_texts(self):
         body_html = "The U.S. has said it will impose <span><i>300 mln</i> dlrs </span>of tariffs on imports of Japanese electronics goods on <span>April 17</span>, in retaliation for Japan's alleged failure to stick to a pact not to sell semiconductors<br/><br/>on world markets at below cost."
@@ -252,39 +189,39 @@ class TestDatasetSplit:
         assert len([ 1 for labels in small_ml.labels if 'B' in labels ]) == 6
         assert len([ 1 for labels in small_ml.labels if 'C' in labels ]) == 4
         
-    def test_split(self, imdb_test, reuters_test):
-        # imdb (multiclass)
+    def test_split(self, imdb_test, toxic_test):
+        # imdb (binary multiclass)
         splits = imdb_test.split(['train', 'test', 'dev'], [0.8, 0.1, 0.1])
         assert type(splits) == Dataset
         assert len(splits) == 3
         assert splits.keys() == set(['train', 'test', 'dev'])
-        assert len(splits['train'].ids) == 800
-        assert len(splits['test'].ids) == 100
-        assert len(splits['dev'].ids) == 100
-        assert len(set(splits['train'].ids + splits['test'].ids + splits['dev'].ids)) == 1000
+        assert len(splits['train'].ids) == 16
+        assert len(splits['test'].ids) == 2
+        assert len(splits['dev'].ids) == 2
+        assert len(set(splits['train'].ids + splits['test'].ids + splits['dev'].ids)) == 20
         assert splits['train'].ids[0].startswith('r')
-        # reuters (multilabel)
-        splits = reuters_test.split(['train', 'test', 'dev'], [0.8, 0.1, 0.1])
+        # toxic (multilabel)
+        splits = toxic_test.split(['train', 'test', 'dev'], [0.8, 0.1, 0.1])
         assert type(splits) == Dataset
         assert len(splits) == 3
         assert splits.keys() == set(['train', 'test', 'dev'])
-        assert len(splits['train'].ids) == 800
-        assert len(splits['test'].ids) == 100
-        assert len(splits['dev'].ids) == 100
-        assert len(set(splits['train'].ids + splits['test'].ids + splits['dev'].ids)) == 1000
+        assert len(splits['train'].ids) == 16
+        assert len(splits['test'].ids) == 2
+        assert len(splits['dev'].ids) == 2
+        assert len(set(splits['train'].ids + splits['test'].ids + splits['dev'].ids)) == 20
 
     def test_kfold(self, imdb_test):
         folds = list(imdb_test.kfold(3))
         train_ids = lambda fold: fold[1][0].ids
         test_ids = lambda fold: fold[1][1].ids
-        assert len(set(test_ids(folds[0]) + test_ids(folds[1]) + test_ids(folds[2]))) == 1000
+        assert len(set(test_ids(folds[0]) + test_ids(folds[1]) + test_ids(folds[2]))) == 20
         for fold in folds:
-            assert len(set(train_ids(fold) + test_ids(fold))) == 1000
-            assert abs(len(train_ids(fold)) - 666) <= 1
-            assert abs(len(test_ids(fold)) - 334) <= 1
+            assert len(set(train_ids(fold) + test_ids(fold))) == 20
+            assert abs(len(train_ids(fold)) - 13) <= 1
+            assert abs(len(test_ids(fold)) - 7) <= 1
 
-    def test_save(self, imdb_test, reuters_test):
-        # imdb (multiclass)
+    def test_save(self, imdb_test, toxic_test):
+        # imdb (binary multiclass)
         with tempfile.TemporaryDirectory() as path:
             fpath = os.path.join(path, "test.csv")
             imdb_test.save(fpath)
@@ -292,12 +229,12 @@ class TestDatasetSplit:
             df = pd.read_csv(fpath, keep_default_na=False)
             assert set(df.columns) == set(['id', 'text', 'sentiment'])
             assert len(df) == len(imdb_test.ids)
-        # reuters (multilabel)
+        # toxic (multilabel)
         with tempfile.TemporaryDirectory() as path:
             fpath = os.path.join(path, "test.tsv")
-            reuters_test.save(fpath, label_sep=',')
+            toxic_test.save(fpath, label_sep=',')
             assert os.path.exists(fpath)
             df = pd.read_csv(fpath, sep='\t', keep_default_na=False)
-            assert set(df.columns) == set(['article_id', 'document_date', 'people', 'orgs', 'places', 'exchanges', 'topics', 'title', 'body'])
-            assert len(df) == len(reuters_test.ids)
-            assert set(df.iloc[2].topics.split(',')) == set(['crude', 'nat-gas'])
+            assert set(df.columns) == set(['id', 'comment_text', 'tags'])
+            assert len(df) == len(toxic_test.ids)
+            assert set(df.iloc[4].tags.split(',')) == set(['toxic', 'obscene', 'insult'])
