@@ -14,15 +14,31 @@ import pdb
 def datadir():
     return pathlib.Path(__file__).parent.resolve() / 'data'
 
-@pytest.fixture(scope='class')
-def imdb_test(datadir):
-    return DatasetSplit.load(datadir/"imdb.test.tsv", label_column='sentiment')
+@pytest.fixture(scope='session')
+def hunspell(datadir):
+    return os.path.join(datadir, 'en_US')
 
 @pytest.fixture(scope='class')
-def imdb_test_lem(datadir):
+def imdb(datadir):
+    return Dataset.load({
+        'train': datadir/"imdb.train.tsv",
+        'test': datadir/"imdb.test.tsv",
+    }, label_column='sentiment')
+
+@pytest.fixture(scope='class')
+def imdb_test_only(datadir):
+    return Dataset.load({
+        'test': datadir/"imdb.test.tsv",
+    }, label_column='sentiment')
+
+@pytest.fixture(scope='class')
+def imdb_test(datadir, imdb_test_only):
+    return imdb_test_only['test']
+
+@pytest.fixture(scope='class')
+def imdb_test_lem(datadir, hunspell):
     ds = DatasetSplit.load(datadir/"imdb.test.tsv", label_column='sentiment')
-    hs_dic = os.path.join(datadir, 'en_US')
-    ds.lemmatize(hs_dic)
+    ds.lemmatize(hunspell)
     return ds
 
 @pytest.fixture(scope='class')
@@ -58,6 +74,33 @@ def small_ml():
         'labels': [['A', 'B'], ['B'], ['B', 'A', 'C'], ['A'], ['A', 'B'], ['B'], ['C']],
         # A:4, B:5, C:2
     }))
+
+class TestDataset:
+
+    def test_load(self, imdb):
+        assert imdb.keys() == set(['train', 'test'])
+        assert len(imdb['test'].ids) == 1000
+
+    def test_clean_texts(self, imdb):
+        assert '<br />' in imdb['test'].texts[3]
+        imdb.clean_texts()
+        assert '<br />' not in imdb['test'].texts[3]
+
+    def test_lemmatize(self, imdb_test_only, hunspell):
+        assert len(imdb_test_only['test'].X[0]) == 897
+        imdb_test_only.lemmatize(hunspell)
+        assert len(imdb_test_only['test'].X[0]) == 807
+
+    def test_save(self, imdb):
+        with tempfile.TemporaryDirectory() as path:
+            imdb.save(path, ext='csv')
+            test_fpath = os.path.join(path, 'test.csv')
+            train_fpath = os.path.join(path, 'train.csv')
+            assert os.path.exists(test_fpath)
+            assert os.path.exists(train_fpath)
+            df = pd.read_csv(test_fpath, keep_default_na=False)
+            assert set(df.columns) == set(['id', 'text', 'sentiment'])
+            assert len(df) == len(imdb['test'].ids)        
 
 class TestDatasetSplit:
 

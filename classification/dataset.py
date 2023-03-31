@@ -20,40 +20,14 @@ class Dataset(MutableMapping):
 
     def __init__(self, splits, mode='auto'):
         self.splits = splits
-        # mode is multilabel?
-        if mode not in [None, 'auto', 'multilabel', 'multiclass']:
-            raise ValueError("Param 'mode' must be one of: 'auto', 'multilabel', 'multiclass', None")
-        if mode == 'multilabel':
-            self._is_multilabel = True
-        elif mode == 'multiclass':
-            self._is_multilabel = False
-        elif mode == 'auto' and len(splits) > 0:
-            are_multilabel = [ ds.is_multilabel for ds in splits.values() ]
-            if len(set(are_multilabel)) != 1:
-                logging.warning("Cannot infer mode automatically, values for different splits differ")
-                self._is_multilabel = None
-            else:
-                self._is_multilabel = are_multilabel[0]
-        else:
-            self._is_multilabel = None
-        # binarize labels
-        self._binarize_labels()
-
-    def _binarize_labels(self):
-        self.label_binarizer = MultiLabelBinarizer() if self._is_multilabel else LabelBinarizer()
-        merged_labels = list(itertools.chain(*[ ds.labels for ds in self.splits.values() ]))
-        self.label_binarizer.fit(merged_labels)
-        for name, ds in self.splits.items():
-            pass
-            #ds.binarize_labels(self.label_binarizer)
 
     @staticmethod
-    def load(split_files, mode='auto', label_column=None):
+    def load(split_files, id_column=None, text_columns=None, label_column=None, label_sep=None):
         splits = {
-            name: DatasetSplit.load(fpath, mode, label_column)
+            name: DatasetSplit.load(fpath, id_column, text_columns, label_column, label_sep)
             for name, fpath in split_files.items()
         }
-        return Dataset(splits, mode)
+        return Dataset(splits)
 
     def clean_texts(self):
         for name, ds in self.splits.items():
@@ -81,12 +55,15 @@ class Dataset(MutableMapping):
     def __len__(self):
         return len(self.splits)
 
-    def save(self, path, override=False):
+    def save(self, path, label_sep='|', ext='tsv', override=False):
         if os.path.isfile(path):
             raise ValueError(f"The given path corresponds to an existing file")
+        ext = ext.strip('.')
+        if ext not in ['tsv', 'csv']:
+            raise ValueError(f"ext must be one of 'tsv' or 'csv'")
         for name, ds in self.splits.items():
-            fpath = os.path.join(path, name+'.tsv')
-            ds.save(fpath, override)
+            fpath = os.path.join(path, name+'.'+ext)
+            ds.save(fpath, label_sep, override)
 
 class DatasetSplit:
 
