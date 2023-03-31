@@ -106,7 +106,7 @@ class DatasetSplit:
         if text_columns is None:
             text_columns = []
             for col in columns:
-                if 'text' in col.lower():
+                if 'text' in col.lower() and '_lem' not in col:
                     text_columns.append(col)
             if len(text_columns) == 0:
                 raise RuntimeError("Could not infer the column(s) for texts. Provide 'text_columns'.")
