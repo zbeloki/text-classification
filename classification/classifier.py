@@ -20,9 +20,14 @@ class Classifier(ABC):
     
     @staticmethod
     @classmethod
-    def train(cls, train_split, dev_split=None, n_trials=0, f_beta=1, top_k=False, *args, **kwargs):
+    def train(cls, train_split, dev_split=None, f_beta=1, top_k=False, *args, **kwargs):
         pass
 
+    @staticmethod
+    @classmethod
+    def search_hyperparameters(cls, train_split, dev_split, n_trials, f_beta=1, top_k=False):
+        pass
+    
     @abstractmethod
     def predict_probabilities(self, texts):
         pass
@@ -31,16 +36,6 @@ class Classifier(ABC):
     @abstractmethod
     def load(cls, path):
         pass
-
-    @staticmethod
-    @abstractmethod
-    def _default_hyperparameters(top_k=False):
-        pass
-
-    @staticmethod
-    @abstractmethod
-    def _sample_hyperparameters(trial, top_k=False):
-        pass    
 
     # methods
     
