@@ -167,6 +167,16 @@ class DatasetSplit:
     def label_column(self):
         return self._labelc
 
+    @property
+    def n_classes(self):
+        classes = set()
+        for labels in self.labels:
+            if self.is_multilabel:
+                classes.update(labels)
+            else:
+                classes.add(labels)
+        return len(classes)
+
     def y(self, label_binarizer=None):
         if label_binarizer is None:
             label_binarizer = self.create_label_binarizer()

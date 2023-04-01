@@ -109,6 +109,10 @@ class TestDatasetSplit:
         assert type(toxic_test.labels[0]) == list
         assert type(toxic_test.labels[4][0]) == str
         assert set(toxic_test.labels[4]) == set(['toxic', 'obscene', 'insult'])
+
+    def test_n_classes(self, imdb_test, toxic_test):
+        assert imdb_test.n_classes == 2
+        assert toxic_test.n_classes == 5
         
     def test_y(self, imdb_test, toxic_test):
         # imdb (binary multiclass)
