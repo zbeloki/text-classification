@@ -1,10 +1,6 @@
 from classification.svm_classifier import SVMClassifier
-from classification.dataset import Dataset, DatasetSplit
 
 import pytest
-import pathlib
-import tempfile
-import os
 import pdb
 
 class TestSVMClassifier:
@@ -44,5 +40,3 @@ class TestSVMClassifier:
         params = SVMClassifier.search_hyperparameters(clothes['train'], clothes['dev'], n_trials=1, search_top_k=True)
         assert 1 <= params['top_k'] < 5
         classifier = SVMClassifier.train(clothes['train'], top_k=3)
-        
-        

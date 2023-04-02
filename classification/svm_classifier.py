@@ -25,14 +25,12 @@ class SVMClassifier(Classifier):
 
     @classmethod
     def train(cls, train_split, dev_split=None, f_beta=1, top_k=None, n_jobs=1, min_df=1, max_df=1.0, loss='squared_hinge', c=1.0, max_iter=1000, **kwargs):
-        config = Config.from_dict(kwargs)
-        classifier, metrics = cls._training_trial(train_split, dev_split, config, n_jobs, f_beta, min_df, max_df, loss, c, max_iter, top_k)
+        classifier, metrics = cls._training_trial(train_split, dev_split, n_jobs, f_beta, min_df, max_df, loss, c, max_iter, top_k, **kwargs)
         print(f"Default hyperparameters: {metrics}")
         return classifier
 
     @classmethod
     def search_hyperparameters(cls, train_split, dev_split, n_trials=10, f_beta=1, search_top_k=False, n_jobs=1, **kwargs):
-        config = Config.from_dict(kwargs)
             
         def objective(trial):
             min_df = trial.suggest_int("min_df", 1, 100, log=True)
@@ -44,8 +42,8 @@ class SVMClassifier(Classifier):
                 max_top_k = min(10, train_split.n_classes-1)
                 top_k = trial.suggest_int("top_k", 1, max_top_k) if search_top_k else None
             else:
-                top_k = trial.suggest_categorical('top_k', [None])
-            _, metrics = cls._training_trial(train_split, dev_split, config, n_jobs, f_beta, min_df, max_df, loss, c, max_iter, top_k)
+                top_k = trial.suggest_categorical('top_k', [None])                
+            _, metrics = cls._training_trial(train_split, dev_split, n_jobs, f_beta, min_df, max_df, loss, c, max_iter, top_k, **kwargs)
             return metrics['f']
 
         warnings.filterwarnings(action='ignore', category=ConvergenceWarning)
@@ -56,7 +54,12 @@ class SVMClassifier(Classifier):
         return study.best_params
 
     @classmethod
-    def _training_trial(cls, train_split, dev_split, config, n_jobs, f_beta, min_df, max_df, loss, c, max_iter, top_k):
+    def _training_trial(cls, train_split, dev_split, n_jobs, f_beta, min_df, max_df, loss, c, max_iter, top_k, **kwargs):
+        
+        kwargs['top_k'] = top_k
+        if 'classification_type' not in kwargs:
+            kwargs['classification_type'] = 'multilabel' if train_split.is_multilabel else 'multiclass'
+        config = Config.from_dict(kwargs)
 
         tfidf_vectorizer = TfidfVectorizer(min_df=min_df, max_df=max_df)
         estimator = LinearSVC(loss=loss, max_iter=max_iter, C=c)

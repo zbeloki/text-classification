@@ -4,11 +4,11 @@ import os
 class Config:
 
     def __init__(self, **kwargs):
-        self.mode = kwargs.pop("mode", "multiclass")
+        self.classification_type = kwargs.pop("classification_type", "multiclass")
 
     @property
     def is_multilabel(self):
-        return self.mode == 'multilabel'
+        return self.classification_type == 'multilabel'
         
     @classmethod
     def from_dict(cls, config_dict):

@@ -1,4 +1,5 @@
 from classification.dataset import Dataset, DatasetSplit
+from classification.svm_classifier import SVMClassifier
 
 import pandas as pd
 
@@ -14,6 +15,8 @@ def datadir():
 @pytest.fixture(scope='session')
 def hunspell(datadir):
     return os.path.join(datadir, 'en_US')
+
+# Datasets
 
 @pytest.fixture(scope='session')
 def imdb(datadir):
@@ -84,3 +87,15 @@ def small_ml():
         'labels': [['A', 'B'], ['B'], ['B', 'A', 'C'], ['A'], ['A', 'B'], ['B'], ['C']],
         # A:4, B:5, C:2
     }))
+
+# models
+
+@pytest.fixture(scope='session')
+def clothes_svm(clothes):
+    return SVMClassifier.train(clothes['train'], min_df=1, max_df=1.0, loss='squared_hinge', c=1.0, max_iter=1000)
+
+# classification outputs
+
+@pytest.fixture(scope='session')
+def clothes_svm_out(clothes, clothes_svm):
+    return clothes_svm.classify(clothes['dev'].X)
