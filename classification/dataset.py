@@ -261,7 +261,9 @@ class DatasetSplit:
         dir_path = os.path.dirname(fpath)
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
+            
+        data = self._data.copy()
         if self.is_multilabel:
-            self._data[self._labelc] = self._data[self._labelc].str.join(label_sep)
+            data[self._labelc] = data[self._labelc].str.join(label_sep)
         column_sep = ',' if os.path.splitext(fpath)[1] == '.csv' else '\t'
-        self._data.to_csv(fpath, sep=column_sep, index=True)
+        data.to_csv(fpath, sep=column_sep, index=True)
