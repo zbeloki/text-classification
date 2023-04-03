@@ -73,13 +73,10 @@ class SVMClassifier(Classifier):
 
         X = train_split.X
         label_binarizer = train_split.create_label_binarizer()
-        y_onehot = train_split.y(label_binarizer)
-        if min(np.sum(y_onehot, axis=0)) < 2:
+        y = train_split.y(label_binarizer)
+        ohv = train_split.ohv(label_binarizer)
+        if min(np.sum(ohv, axis=0)) < 2:
                 raise ValueError("CalibratedClassifierCV needs at least 2 examples from each class")
-        if config.is_multilabel:
-            y = y_onehot
-        else:
-            y = train_split.labels
 
         pipe.fit(X, y)
 
