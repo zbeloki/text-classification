@@ -5,7 +5,7 @@ import pdb
 
 class ClassificationOutput:
 
-    def __init__(self, probas, label_binarizer, is_multilabel, threshold=None, top_k=None):
+    def __init__(self, probas, is_multilabel, label_binarizer=None, threshold=None, top_k=None):
         self._probas = probas
         self._lb = label_binarizer
         self._is_multilabel = is_multilabel
@@ -26,32 +26,26 @@ class ClassificationOutput:
             return self._y_multiclass()
 
     @cached_property
-    def classes(self):
-        classes = self._lb.inverse_transform(self.y)
-        if self._is_multilabel:
-            classes = [ list(cls) for cls in classes ]
+    def labels(self):
+        if self._lb is None:
+            if self._is_multilabel:
+                return [ np.where(y == 1)[0].tolist() for y in self.y ]
+            else:
+                return np.argmax(self.y, axis=1).tolist()
         else:
-            classes = classes.tolist()
-        return classes
+            classes = self._lb.inverse_transform(self.y)
+            if self._is_multilabel:
+                return [ list(cls) for cls in classes ]
+            else:
+                return classes.tolist()            
 
     @cached_property
-    def class_probas(self):
+    def label_probas(self):
         if self._is_multilabel:
-            probas = [ exps[exis].tolist() for exis, exps in zip(self.class_indices, self.probas) ]
+            probas = [ self.probas[i][self.y[i]==1].tolist() for i in range(len(self.y)) ]
         else:
-            probas = self.probas[self.y.astype(bool)].tolist()
-        return self.classes, probas
-
-    @cached_property
-    def class_indices(self):
-        if self._is_multilabel:
-            return [ np.where(y == 1)[0].tolist() for y in self.y ]
-        else:
-            return np.argmax(self.y, axis=1).tolist()
-
-    @cached_property
-    def class_index_probas(self):
-        return self.class_indices, self.class_probas[1]
+            probas = self.probas[self.y == 1].tolist()        
+        return self.labels, probas
 
     def _y_multilabel(self):
         y = np.copy(self._probas)
@@ -70,4 +64,3 @@ class ClassificationOutput:
         y[rows, max_cols] = 1
         y[y < 1] = 0
         return y.astype(int)
-

@@ -1,5 +1,6 @@
 from classification.dataset import Dataset, DatasetSplit
 from classification.svm_classifier import SVMClassifier
+from classification.classification_output import ClassificationOutput
 
 import pandas as pd
 
@@ -106,24 +107,45 @@ def toxic_svm(toxic):
 
 @pytest.fixture(scope='session')
 def imdb_svm_out(imdb, imdb_svm):
-    return imdb_svm.classify(imdb['dev'].X)
+    probas = imdb_svm.predict_probabilities(imdb['dev'].X)
+    return ClassificationOutput(probas, False)
+
+@pytest.fixture(scope='session')
+def imdb_svm_out_lb(imdb, imdb_svm):
+    probas = imdb_svm.predict_probabilities(imdb['dev'].X)
+    return ClassificationOutput(probas, False, label_binarizer=imdb_svm._label_binarizer)
 
 @pytest.fixture(scope='session')
 def clothes_svm_out(clothes, clothes_svm):
-    return clothes_svm.classify(clothes['dev'].X)
+    probas = clothes_svm.predict_probabilities(clothes['dev'].X)
+    return ClassificationOutput(probas, False)
+
+@pytest.fixture(scope='session')
+def clothes_svm_out_lb(clothes, clothes_svm):
+    probas = clothes_svm.predict_probabilities(clothes['dev'].X)
+    return ClassificationOutput(probas, False, label_binarizer=clothes_svm._label_binarizer)
 
 @pytest.fixture(scope='session')
 def toxic_svm_out(toxic, toxic_svm):
-    return toxic_svm.classify(toxic['dev'].X)
+    probas = toxic_svm.predict_probabilities(toxic['dev'].X)
+    return ClassificationOutput(probas, True)
+
+@pytest.fixture(scope='session')
+def toxic_svm_out_lb(toxic, toxic_svm):
+    probas = toxic_svm.predict_probabilities(toxic['dev'].X)
+    return ClassificationOutput(probas, True, label_binarizer=toxic_svm._label_binarizer)
 
 @pytest.fixture(scope='session')
 def toxic_svm_out_top3(toxic, toxic_svm):
-    return toxic_svm.classify(toxic['dev'].X, top_k=3)
+    probas = toxic_svm.predict_probabilities(toxic['dev'].X)
+    return ClassificationOutput(probas, True, top_k=3)
 
 @pytest.fixture(scope='session')
 def toxic_svm_out_th(toxic, toxic_svm):
-    return toxic_svm.classify(toxic['dev'].X, threshold=0.8)
+    probas = toxic_svm.predict_probabilities(toxic['dev'].X)
+    return ClassificationOutput(probas, True, threshold=0.8)
 
 @pytest.fixture(scope='session')
 def toxic_svm_out_top3_th(toxic, toxic_svm):
-    return toxic_svm.classify(toxic['dev'].X, top_k=3, threshold=0.8)
+    probas = toxic_svm.predict_probabilities(toxic['dev'].X)
+    return ClassificationOutput(probas, True, threshold=0.8, top_k=3)
