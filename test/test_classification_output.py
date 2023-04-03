@@ -28,9 +28,9 @@ class TestClassificationOutput:
         assert type(clothes_svm_out.y) == np.ndarray
         assert type(clothes_svm_out.y[0]) == np.int64
         assert clothes_svm_out.y[:5].tolist() == [1, 1, 4, 4, 1]
-        assert clothes_svm_out.y_2d[0].tolist() == [0, 1, 0, 0, 0]
-        assert clothes_svm_out.y_2d[2].tolist() == [0, 0, 0, 0, 1]
-        assert np.sum(clothes_svm_out.y_2d) == 50
+        assert clothes_svm_out.ohv[0].tolist() == [0, 1, 0, 0, 0]
+        assert clothes_svm_out.ohv[2].tolist() == [0, 0, 0, 0, 1]
+        assert np.sum(clothes_svm_out.ohv) == 50
 
     def test_y_multilabel(self, toxic_svm_out, toxic_svm_out_top3, toxic_svm_out_th, toxic_svm_out_top3_th):
         assert type(toxic_svm_out.y) == np.ndarray
@@ -44,8 +44,8 @@ class TestClassificationOutput:
         assert toxic_svm_out_top3.y[2].tolist() == [1, 0, 1, 1, 0, 0]
         assert toxic_svm_out.y[5].tolist() == [0, 1, 1, 1, 0, 1]
         assert toxic_svm_out_top3.y[5].tolist() == [0, 1, 1, 0, 0, 1]
-        assert toxic_svm_out.y_2d[0].tolist() == [0, 1, 1, 0, 0, 1]
-        assert toxic_svm_out_top3.y_2d[0].tolist() == [0, 1, 1, 0, 0, 1]
+        assert toxic_svm_out.ohv[0].tolist() == [0, 1, 1, 0, 0, 1]
+        assert toxic_svm_out_top3.ohv[0].tolist() == [0, 1, 1, 0, 0, 1]
         # threshold: 0.8
         assert toxic_svm_out_th.y[0].tolist() == [0, 1, 1, 0, 0, 1]
         assert toxic_svm_out_top3_th.y[0].tolist() == [0, 1, 1, 0, 0, 1]
@@ -53,8 +53,8 @@ class TestClassificationOutput:
         assert toxic_svm_out_top3_th.y[1].tolist() == [0, 0, 0, 0, 0, 1]
         assert toxic_svm_out_th.y[2].tolist() == [0, 0, 0, 0, 0, 0]
         assert toxic_svm_out_top3_th.y[2].tolist() == [0, 0, 0, 0, 0, 0]
-        assert toxic_svm_out_th.y_2d[0].tolist() == [0, 1, 1, 0, 0, 1]
-        assert toxic_svm_out_top3_th.y_2d[0].tolist() == [0, 1, 1, 0, 0, 1]
+        assert toxic_svm_out_th.ohv[0].tolist() == [0, 1, 1, 0, 0, 1]
+        assert toxic_svm_out_top3_th.ohv[0].tolist() == [0, 1, 1, 0, 0, 1]
 
     def test_labels_binary(self, imdb_svm_out, imdb_svm_out_lb):
         classes = imdb_svm_out_lb.labels

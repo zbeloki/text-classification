@@ -21,26 +21,26 @@ class ClassificationOutput:
     @cached_property
     def y(self):
         if self._is_multilabel:
-            return self._y_2d_multilabel()
+            return self._ohv_multilabel()
         else:
-            return self._y_1d_multiclass()
+            return self._y_multiclass()
 
     @cached_property
-    def y_2d(self):
+    def ohv(self):
         if self._is_multilabel:
-            return self._y_2d_multilabel()
+            return self._ohv_multilabel()
         else:
-            return self._y_2d_multiclass()
+            return self._ohv_multiclass()
 
     @cached_property
     def labels(self):
         if self._lb is None:
             if self._is_multilabel:
-                return [ np.where(y == 1)[0].tolist() for y in self.y_2d ]
+                return [ np.where(y == 1)[0].tolist() for y in self.ohv ]
             else:
-                return self._y_1d_multiclass().tolist()
+                return self._y_multiclass().tolist()
         else:
-            classes = self._lb.inverse_transform(self.y_2d)
+            classes = self._lb.inverse_transform(self.ohv)
             if self._is_multilabel:
                 return [ list(cls) for cls in classes ]
             else:
@@ -49,15 +49,26 @@ class ClassificationOutput:
     @cached_property
     def label_probas(self):
         if self._is_multilabel:
-            probas = [ self.probas[i][self.y_2d[i]==1].tolist() for i in range(len(self.y_2d)) ]
+            probas = [ self.probas[i][self.ohv[i]==1].tolist() for i in range(len(self.ohv)) ]
         else:
-            probas = self.probas[self.y_2d == 1].tolist()        
+            probas = self.probas[self.ohv == 1].tolist()        
         return self.labels, probas
 
     
     # Helpers
     
-    def _y_2d_multilabel(self):
+    def _y_multiclass(self):
+        return np.argmax(self._ohv_multiclass(), axis=1)
+
+    def _ohv_multiclass(self):
+        y = np.copy(self.probas)
+        rows = np.arange(len(y))
+        max_cols = np.argmax(y, axis=1)
+        y[rows, max_cols] = 1
+        y[y < 1] = 0
+        return y.astype(int)
+
+    def _ohv_multilabel(self):
         y = np.copy(self._probas)
         y[y < self._threshold] = 0
         if self._top_k is not None:
@@ -66,14 +77,4 @@ class ClassificationOutput:
             y[y < threshold_probas] = 0
         y[y > 0] = 1
         return y.astype(int)
-
-    def _y_1d_multiclass(self):
-        return np.argmax(self._y_2d_multiclass(), axis=1)
-
-    def _y_2d_multiclass(self):
-        y = np.copy(self.probas)
-        rows = np.arange(len(y))
-        max_cols = np.argmax(y, axis=1)
-        y[rows, max_cols] = 1
-        y[y < 1] = 0
-        return y.astype(int)
+    
