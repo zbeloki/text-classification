@@ -91,11 +91,27 @@ def small_ml():
 # models
 
 @pytest.fixture(scope='session')
+def imdb_svm(imdb):
+    return SVMClassifier.train(imdb['train'], min_df=1, max_df=1.0, loss='squared_hinge', c=1.0, max_iter=1000)
+
+@pytest.fixture(scope='session')
 def clothes_svm(clothes):
     return SVMClassifier.train(clothes['train'], min_df=1, max_df=1.0, loss='squared_hinge', c=1.0, max_iter=1000)
+
+@pytest.fixture(scope='session')
+def toxic_svm(toxic):
+    return SVMClassifier.train(toxic['train'], min_df=1, max_df=1.0, loss='squared_hinge', c=1.0, max_iter=1000)
 
 # classification outputs
 
 @pytest.fixture(scope='session')
+def imdb_svm_out(imdb, imdb_svm):
+    return imdb_svm.classify(imdb['dev'].X)
+
+@pytest.fixture(scope='session')
 def clothes_svm_out(clothes, clothes_svm):
     return clothes_svm.classify(clothes['dev'].X)
+
+@pytest.fixture(scope='session')
+def toxic_svm_out(toxic, toxic_svm):
+    return toxic_svm.classify(toxic['dev'].X)
