@@ -178,13 +178,21 @@ class DatasetSplit:
         return len(classes)
 
     def y(self, label_binarizer=None):
+        # OHV if multilabel else class indices
+        ohv = self.ohv(label_binarizer)
+        if self.is_multilabel:
+            return ohv
+        else:
+            return np.argmax(ohv, axis=1)
+
+    def ohv(self, label_binarizer=None):
+        # One-Hot Vector
         if label_binarizer is None:
             label_binarizer = self.create_label_binarizer()
-        y = label_binarizer.transform(self.labels)
+        ohv = label_binarizer.transform(self.labels)
         if len(label_binarizer.classes_) == 2:
-            # force one-hot encoding if binary classification, as LabelBinarizer encodes in 1D
-            y = np.array([ (1, 0) if l == 0 else (0, 1) for l in y ])
-        return y
+            ohv = np.array([ (1, 0) if l == 0 else (0, 1) for l in ohv ])
+        return ohv
 
     def create_label_binarizer(self):
         label_binarizer = MultiLabelBinarizer() if self.is_multilabel else LabelBinarizer()
@@ -213,7 +221,7 @@ class DatasetSplit:
             self._data.insert(text_idx+1, col+LEM_SUFFIX, lemmatized)
 
     def oversample(self, target_f=np.average):
-        _, _, ids = utils.oversample(self.texts, self.y(), target_f)
+        _, _, ids = utils.oversample(self.texts, self.ohv(), target_f)
         self._data = self._data.iloc[ids]
 
     def split(self, names, sizes):
@@ -236,7 +244,7 @@ class DatasetSplit:
                 split_inds = rem_inds
             else:
                 size = split_size / (len(rem_inds) / len(self._data.index))
-                res = split_f(rem_inds.reshape((-1,1)), self.y()[rem_inds,:], 1.0-size)
+                res = split_f(rem_inds.reshape((-1,1)), self.ohv()[rem_inds,:], 1.0-size)
                 split_inds = res[0].squeeze()
                 rem_inds = np.array([ idx for idx in rem_inds if idx not in split_inds ])
             splits[split_name] = self._build_from_indices(split_inds)
