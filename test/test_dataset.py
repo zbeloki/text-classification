@@ -16,10 +16,10 @@ class TestDataset:
         assert imdb.keys() == set(['train', 'test', 'dev'])
         assert len(imdb['test'].ids) == 20
 
-    def test_clean_texts(self, imdb):
-        assert '<br />' in imdb['test'].texts[3]
-        imdb.clean_texts()
-        assert '<br />' not in imdb['test'].texts[3]
+    def test_clean_texts(self, imdb_func):
+        assert '<br />' in imdb_func['test'].texts[3]
+        imdb_func.clean_texts()
+        assert '<br />' not in imdb_func['test'].texts[3]
 
     def test_lemmatize(self, imdb_func, hunspell):
         assert len(imdb_func['test'].X[0]) == 897
@@ -35,7 +35,7 @@ class TestDataset:
             assert os.path.exists(train_fpath)
             df = pd.read_csv(test_fpath, keep_default_na=False)
             assert set(df.columns) == set(['id', 'text', 'sentiment'])
-            assert len(df) == len(imdb['test'].ids)        
+            assert len(df) == len(imdb['test'].ids)
 
 class TestDatasetSplit:
 
