@@ -25,21 +25,31 @@ class ClassificationOutput:
 
     @cached_property
     def classes(self):
-        return self._lb.inverse_transform(self.y)
+        classes = self._lb.inverse_transform(self.y)
+        if self._is_multilabel:
+            classes = [ list(cls) for cls in classes ]
+        else:
+            classes = classes.tolist()
+        return classes
 
     @cached_property
     def class_probas(self):
-        probas = self.probas[self.y.astype(bool)]
+        if self._is_multilabel:
+            probas = [ exps[exis].tolist() for exis, exps in zip(self.class_indices, self.probas) ]
+        else:
+            probas = self.probas[self.y.astype(bool)].tolist()
         return self.classes, probas
 
     @cached_property
     def class_indices(self):
-        return np.argmax(self.y, axis=1)
+        if self._is_multilabel:
+            return [ np.where(y == 1)[0].tolist() for y in self.y ]
+        else:
+            return np.argmax(self.y, axis=1).tolist()
 
     @cached_property
     def class_index_probas(self):
-        probas = self.probas[self.y.astype(bool)]
-        return self.class_indices, probas
+        return self.class_indices, self.class_probas[1]
 
     def _y_multilabel(self):
         y = np.copy(self._probas)
