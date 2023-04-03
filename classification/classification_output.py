@@ -21,19 +21,26 @@ class ClassificationOutput:
     @cached_property
     def y(self):
         if self._is_multilabel:
-            return self._y_multilabel()
+            return self._y_2d_multilabel()
         else:
-            return self._y_multiclass()
+            return self._y_1d_multiclass()
+
+    @cached_property
+    def y_2d(self):
+        if self._is_multilabel:
+            return self._y_2d_multilabel()
+        else:
+            return self._y_2d_multiclass()
 
     @cached_property
     def labels(self):
         if self._lb is None:
             if self._is_multilabel:
-                return [ np.where(y == 1)[0].tolist() for y in self.y ]
+                return [ np.where(y == 1)[0].tolist() for y in self.y_2d ]
             else:
-                return np.argmax(self.y, axis=1).tolist()
+                return self._y_1d_multiclass().tolist()
         else:
-            classes = self._lb.inverse_transform(self.y)
+            classes = self._lb.inverse_transform(self.y_2d)
             if self._is_multilabel:
                 return [ list(cls) for cls in classes ]
             else:
@@ -42,12 +49,15 @@ class ClassificationOutput:
     @cached_property
     def label_probas(self):
         if self._is_multilabel:
-            probas = [ self.probas[i][self.y[i]==1].tolist() for i in range(len(self.y)) ]
+            probas = [ self.probas[i][self.y_2d[i]==1].tolist() for i in range(len(self.y_2d)) ]
         else:
-            probas = self.probas[self.y == 1].tolist()        
+            probas = self.probas[self.y_2d == 1].tolist()        
         return self.labels, probas
 
-    def _y_multilabel(self):
+    
+    # Helpers
+    
+    def _y_2d_multilabel(self):
         y = np.copy(self._probas)
         y[y < self._threshold] = 0
         if self._top_k is not None:
@@ -57,7 +67,10 @@ class ClassificationOutput:
         y[y > 0] = 1
         return y.astype(int)
 
-    def _y_multiclass(self):
+    def _y_1d_multiclass(self):
+        return np.argmax(self._y_2d_multiclass(), axis=1)
+
+    def _y_2d_multiclass(self):
         y = np.copy(self.probas)
         rows = np.arange(len(y))
         max_cols = np.argmax(y, axis=1)
