@@ -115,3 +115,15 @@ def clothes_svm_out(clothes, clothes_svm):
 @pytest.fixture(scope='session')
 def toxic_svm_out(toxic, toxic_svm):
     return toxic_svm.classify(toxic['dev'].X)
+
+@pytest.fixture(scope='session')
+def toxic_svm_out_top3(toxic, toxic_svm):
+    return toxic_svm.classify(toxic['dev'].X, top_k=3)
+
+@pytest.fixture(scope='session')
+def toxic_svm_out_th(toxic, toxic_svm):
+    return toxic_svm.classify(toxic['dev'].X, threshold=0.8)
+
+@pytest.fixture(scope='session')
+def toxic_svm_out_top3_th(toxic, toxic_svm):
+    return toxic_svm.classify(toxic['dev'].X, top_k=3, threshold=0.8)

@@ -5,11 +5,13 @@ import pdb
 
 class ClassificationOutput:
 
-    def __init__(self, probas, label_binarizer, is_multilabel, threshold=0.5, top_k=None):
+    def __init__(self, probas, label_binarizer, is_multilabel, threshold=None, top_k=None):
         self._probas = probas
         self._lb = label_binarizer
         self._is_multilabel = is_multilabel
-        self._threshold = threshold if top_k is None else 0.0
+        self._threshold = threshold
+        if threshold is None:
+            self._threshold = 0.5 if top_k is None else 0.0
         self._top_k = top_k
 
     @cached_property
@@ -55,9 +57,9 @@ class ClassificationOutput:
         y = np.copy(self._probas)
         y[y < self._threshold] = 0
         if self._top_k is not None:
-            threshold_probas = -np.sort(-y)[:, self._top_k]
+            threshold_probas = -np.sort(-y)[:, self._top_k-1]
             threshold_probas = threshold_probas[..., np.newaxis]
-            y[y <= threshold_probas] = 0
+            y[y < threshold_probas] = 0
         y[y > 0] = 1
         return y.astype(int)
 

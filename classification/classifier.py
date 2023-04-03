@@ -53,7 +53,7 @@ class Classifier(ABC):
         metrics = { m: np.average([ ms[m] for ms in all_metrics ]) for m in metric_names }
         return metrics
 
-    def classify(self, texts, threshold=0.5, top_k=None):
+    def classify(self, texts, threshold=None, top_k=None):
         y_proba = self.predict_probabilities(texts)
         is_multilabel = self.config.classification_type == 'multilabel'
         return ClassificationOutput(y_proba, self._label_binarizer, is_multilabel, threshold, top_k)
