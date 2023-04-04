@@ -1,5 +1,6 @@
 from .config import Config
 from .classification_output import ClassificationOutput
+from .evaluation_output import EvaluationOutput
 
 from sklearn.metrics import fbeta_score, precision_score, recall_score
 import numpy as np
@@ -56,12 +57,13 @@ class Classifier(ABC):
     def classify(self, texts, threshold=None, top_k=None):
         y_proba = self.predict_probabilities(texts)
         is_multilabel = self.config.classification_type == 'multilabel'
-        return ClassificationOutput(y_proba, self._label_binarizer, is_multilabel, threshold, top_k)
+        return ClassificationOutput(y_proba, is_multilabel, self._label_binarizer, threshold, top_k)
 
-    def evaluate(self, test_split, beta=1, top_k=None):
+    def evaluate(self, test_split, beta=1, threshold=None, top_k=None):
         X, y = test_split.X, test_split.y(self._label_binarizer)
         y_proba = self.predict_probabilities(X)
-        return self._evaluate_probabilities(y, y_proba, beta, top_k)
+        is_multilabel = self._config.classification_type == 'multilabel'
+        return EvaluationOutput(y, y_proba, is_multilabel, self._label_binarizer, beta, threshold, top_k)
 
     def save(self, path):
         if not os.path.exists(path):
@@ -80,15 +82,14 @@ class Classifier(ABC):
         }
 
     @classmethod
-    def _evaluate_logits(cls, y_true, logits, is_multilabel, beta=1, top_k=None):
+    def _evaluate_logits(cls, y_true, logits, is_multilabel, beta=1.0, top_k=None):
         if is_multilabel:
             sigmoid = lambda x: 1 / (1 + np.exp(-x))
             probas = sigmoid(logits)
-            return cls._evaluate_probabilities(y_true, probas, beta, top_k)
         else:
-            y_pred = np.argmax(logits, axis=1)
-            y_true = np.argmax(y_true, axis=1)
-            return cls._evaluate_preds(y_true, y_pred, beta, top_k)
+            pass
+            #probas = np.argmax(logits, axis=1) # softmax -> probas -> EvaluationOutput()
+        return EvaluationOutput(y_true, probas, beta, top_k)
 
     @classmethod
     def _evaluate_probabilities(cls, y_true, y_proba, beta=1, top_k=None):

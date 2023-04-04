@@ -8,21 +8,21 @@ class TestSVMClassifier:
     def test_train_binary(self, imdb):
         
         classifier = SVMClassifier.train(imdb['train'])
-        assert 0.99 <= classifier.evaluate(imdb['train'])['f'] <= 1.00
-        assert 0.90 <= classifier.evaluate(imdb['dev'])['f'] <= 0.91
-        assert 0.85 <= classifier.evaluate(imdb['test'])['f'] <= 0.86
+        assert 0.99 <= classifier.evaluate(imdb['train']).f('micro') <= 1.00
+        assert 0.90 <= classifier.evaluate(imdb['dev']).f('micro') <= 0.91
+        assert 0.85 <= classifier.evaluate(imdb['test']).f('micro') <= 0.86
 
     def test_train_multiclass(self, clothes):
         classifier = SVMClassifier.train(clothes['train'])
-        assert 0.94 <= classifier.evaluate(clothes['train'])['f'] <= 0.95
-        assert 0.62 <= classifier.evaluate(clothes['dev'])['f'] <= 0.63
-        assert 0.87 <= classifier.evaluate(clothes['test'])['f'] <= 0.88
+        assert 0.94 <= classifier.evaluate(clothes['train']).f('micro') <= 0.95
+        assert 0.62 <= classifier.evaluate(clothes['dev']).f('micro') <= 0.63
+        assert 0.87 <= classifier.evaluate(clothes['test']).f('micro') <= 0.88
 
     def test_train_multiclass(self, toxic):
         classifier = SVMClassifier.train(toxic['train'])
-        assert 0.99 <= classifier.evaluate(toxic['train'])['f'] <= 1.00
-        assert 0.79 <= classifier.evaluate(toxic['dev'])['f'] <= 0.80
-        assert 0.83 <= classifier.evaluate(toxic['test'])['f'] <= 0.84
+        assert 0.99 <= classifier.evaluate(toxic['train']).f('micro') <= 1.00
+        assert 0.79 <= classifier.evaluate(toxic['dev']).f('micro') <= 0.80
+        assert 0.83 <= classifier.evaluate(toxic['test']).f('micro') <= 0.84
 
     def test_search_hyperparameters_binary(self, imdb):
         params = SVMClassifier.search_hyperparameters(imdb['train'], imdb['dev'], n_trials=2)

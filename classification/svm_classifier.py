@@ -44,7 +44,7 @@ class SVMClassifier(Classifier):
             else:
                 top_k = trial.suggest_categorical('top_k', [None])                
             _, metrics = cls._training_trial(train_split, dev_split, n_jobs, f_beta, min_df, max_df, loss, c, max_iter, top_k, **kwargs)
-            return metrics['f']
+            return metrics.f('weighted')
 
         warnings.filterwarnings(action='ignore', category=ConvergenceWarning)
         study = optuna.create_study(direction="maximize")
