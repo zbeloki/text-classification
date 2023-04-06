@@ -20,13 +20,13 @@ class Classifier(ABC):
 
     # ABSTRACT methods
     
-    @staticmethod
     @classmethod
+    @abstractmethod
     def train(cls, train_split, dev_split=None, f_beta=1, top_k=False, *args, **kwargs):
         pass
 
-    @staticmethod
     @classmethod
+    @abstractmethod
     def search_hyperparameters(cls, train_split, dev_split, n_trials, f_beta=1, top_k=False):
         pass
     
@@ -90,26 +90,3 @@ class Classifier(ABC):
             pass
             #probas = np.argmax(logits, axis=1) # softmax -> probas -> EvaluationOutput()
         return EvaluationOutput(y_true, probas, beta, top_k)
-
-    @classmethod
-    def _evaluate_probabilities(cls, y_true, y_proba, beta=1, top_k=None):
-        threshold = 0.5 if top_k is None else 0.0
-        
-        y_proba[y_proba < threshold] = 0
-        if top_k is not None:
-            threshold_probas = -np.sort(-y_proba)[:, top_k]
-            threshold_probas = threshold_probas[..., np.newaxis]
-            y_proba[y_proba <= threshold_probas] = 0
-        y_proba[y_proba > 0] = 1
-        y_pred = y_proba.astype(int)
-            
-        return cls._evaluate_preds(y_true, y_pred, beta)
-
-    @staticmethod
-    def _evaluate_preds(y_true, y_pred, beta=1):
-        f = fbeta_score(y_true, y_pred, beta=beta, average='micro')
-        p = precision_score(y_true, y_pred, average='micro')
-        r = recall_score(y_true, y_pred, average='micro')
-        metrics = {'f':f, 'p':p, 'r':r}
-        return metrics
-

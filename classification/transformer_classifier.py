@@ -1,4 +1,5 @@
-from classifier import Classifier
+from .classifier import Classifier
+from .config import Config
 
 import torch
 from transformers import TrainingArguments, AutoTokenizer, Trainer, EarlyStoppingCallback, AutoModelForSequenceClassification, pipeline
@@ -23,21 +24,29 @@ PIPELINE_KWARGS = {
 
 class TransformerClassifier(Classifier):
     
-    def __init__(self, model, is_multilabel):
-        super().__init__(model, is_multilabel)
-
-    @staticmethod
-    def load(path, is_multilabel):
-        model = pipeline('text-classification', model=path, **PIPELINE_KWARGS)
-        return TransformerClassifier(model, is_multilabel)
+    def __init__(self, config, label_binarizer, model, tokenizer):
+        super().__init__(config, label_binarizer)
+        self._pipe = pipeline('text-classification',
+                              model=model,
+                              tokenizer=tokenizer,
+                              **PIPELINE_KWARGS)
             
     @classmethod
-    def train(cls, is_multilabel, train_split, dev_split=None, n_trials=0, model_id=None, *args, **kwargs):
-        train_hf = train_split.to_hf()
-        dev_hf = None if dev_split is None else dev_split.to_hf()
+    def train(cls, train_split, dev_split=None, f_beta=1.0, top_k=None, model_id=None, *args, **kwargs):
+        params = {
+            'num_train_epochs': 1,
+            'seed': 2,
+            'per_device_train_batch_size': 16,
+        }
+        max_len = 512
+        grad_acc = 2
+        optim_metric = 'f'
 
-        MAX_LEN = 512
-        tokenizer = AutoTokenizer.from_pretrained(model_id, model_max_length=MAX_LEN)
+        label_binarizer = train_split.create_label_binarizer()
+        train_hf = train_split.to_hf(label_binarizer)
+        dev_hf = None if dev_split is None else dev_split.to_hf(label_binarizer)
+
+        tokenizer = AutoTokenizer.from_pretrained(model_id, model_max_length=max_len)
 
         def tokenize(examples):
             return tokenizer(examples['text'], padding='max_length', truncation=True, return_tensors='pt')
@@ -47,30 +56,33 @@ class TransformerClassifier(Classifier):
         
         def model_init():
             model = AutoModelForSequenceClassification.from_pretrained(model_id, num_labels=train_split.n_classes)
-            if is_multilabel:
+            if train_split.is_multilabel:
                 model.config.problem_type = "multi_label_classification"
             return model
 
         def compute_metrics(eval_pred):
             logits, labels = eval_pred
-            metrics = cls._evaluate_logits(labels, logits, is_multilabel)
-            return metrics
-
-        
+            eval_output = cls._evaluate_logits(labels, logits, is_multilabel)
+            average = 'weighted'
+            return {
+                'f': eval_output.f(average),
+                'precision': eval_output.precision(average),
+                'recall': eval_output.recall(average),
+            }
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            default_params = cls._default_hyperparameters()
             args = TrainingArguments(tmp_dir,
                                      save_strategy="epoch",
-                                     gradient_accumulation_steps=2,
-                                     **default_params)
+                                     gradient_accumulation_steps=grad_acc,
+                                     optim='adamw_torch',
+                                     **params)
 
             callbacks = []
             if dev_hf is not None:
                 # Keep best model
                 args.load_best_model_at_end = True
                 args.evaluation_strategy = 'epoch'
-                args.metric_for_best_model = 'f'
+                args.metric_for_best_model = optim_metric
                 args.save_total_limit = 1
                 # Early stopping
                 early_stop = EarlyStoppingCallback(early_stopping_patience=2,
@@ -86,29 +98,20 @@ class TransformerClassifier(Classifier):
 
             trainer.train()
 
-            if n_trials > 0:
-                compute_objective = lambda metrics: metrics['eval_f']
-                best_run = trainer.hyperparameter_search(n_trials=n_trials,
-                                                         direction='maximize',
-                                                         hp_space=cls._sample_hyperparameters,
-                                                         compute_objective=compute_objective)
+        kwargs['top_k'] = top_k
+        if 'classification_type' not in kwargs:
+            kwargs['classification_type'] = 'multilabel' if train_split.is_multilabel else 'multiclass'
+        config = Config.from_dict(kwargs)
+            
+        return TransformerClassifier(config, label_binarizer, trainer.model, tokenizer)
 
-        device = f'cuda:{torch.cuda.current_device()}' if torch.cuda.is_available() else 'cpu'
-        pipe = pipeline('text-classification',
-                        model=trainer.model,
-                        tokenizer=tokenizer,
-                        **PIPELINE_KWARGS)
-
-        return TransformerClassifier(pipe, is_multilabel)
-
-    @staticmethod
-    def _default_hyperparameters(trial=None):
-        return {
-            'num_train_epochs': 3,
-            'learning_rate': 1e-5,
-            'seed': 2,
-            'per_device_train_batch_size': 16,
-        }
+    @classmethod
+    def search_hyperparameters(cls, train_split, dev_split, n_trials, f_beta=1, top_k=False):
+        compute_objective = lambda metrics: metrics['eval_f']
+        best_run = trainer.hyperparameter_search(n_trials=n_trials,
+                                                 direction='maximize',
+                                                 hp_space=cls._sample_hyperparameters,
+                                                 compute_objective=compute_objective)
 
     @staticmethod
     def _sample_hyperparameters(trial):
@@ -119,12 +122,24 @@ class TransformerClassifier(Classifier):
             'per_device_train_batch_size': trial.suggest_categorical("per_device_train_batch_size", [4, 8, 16]),
         }
 
-    @staticmethod
-    def predict_probabilities(texts, model):
+    def predict_probabilities(self, texts):
         if type(texts) == np.ndarray:
             texts = texts.tolist()
-        pipeline_output = model(texts, truncation=True)
-        return np.array([ [ e['score'] for e in doc_res ] for doc_res in pipeline_output ])
+        tokenizer = self._pipe.tokenizer
+        model = self._pipe.model
+        device = get_device()
+        tokens = tokenizer(texts, truncation=True, padding='longest', return_tensors='pt').to(device)
+        output = model(**tokens)
+        if self._config.classification_type == 'multilabel':
+            probas = torch.sigmoid(output.logits)
+        else:
+            probas = torch.nn.functional.softmax(output.logits, dim=1)
+        return probas.detach().cpu().numpy()
+
+    @classmethod
+    def load(cls, path):
+        model = pipeline('text-classification', model=path, **PIPELINE_KWARGS)
+        return TransformerClassifier(model, is_multilabel)
 
     def save(self, path):        
         self._model.save_pretrained(path)

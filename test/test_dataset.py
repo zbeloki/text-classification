@@ -154,21 +154,21 @@ class TestDatasetSplit:
         assert ds.features.keys() == set(['id', 'text', 'labels'])
         assert ds.features['id'] == datasets.Value(dtype='string')
         assert ds.features['text'] == datasets.Value(dtype='string')
-        assert ds.features['labels'] == datasets.Value(dtype='string')
+        assert ds.features['labels'] == datasets.ClassLabel(names=['negative', 'positive'])
         assert len(ds) == 20
         assert ds['id'][0] == 'r30773'
         assert len(ds['text'][0]) == 897
-        assert ds['labels'][0] == 'negative'
+        assert ds['labels'][0] == 0
         # toxic (multilabel)
         ds = toxic_test.to_hf()
         assert ds.features.keys() == set(['id', 'text', 'labels'])
         assert ds.features['id'] == datasets.Value(dtype='string')
         assert ds.features['text'] == datasets.Value(dtype='string')
-        assert ds.features['labels'] == datasets.Sequence(feature=datasets.Value(dtype='string'))
+        assert ds.features['labels'] == datasets.Sequence(feature=datasets.Value(dtype='float32'))
         assert len(ds) == 20
         assert ds['id'][0] == '6728190ab6bb7bb0'
         assert len(ds['text'][0]) == 1485
-        assert ds['labels'][4] == ['toxic', 'obscene', 'insult']
+        assert ds['labels'][4] == [0, 1, 1, 0, 1]
 
     def test_clean_texts(self):
         body_html = "The U.S. has said it will impose <span><i>300 mln</i> dlrs </span>of tariffs on imports of Japanese electronics goods on <span>April 17</span>, in retaliation for Japan's alleged failure to stick to a pact not to sell semiconductors<br/><br/>on world markets at below cost."

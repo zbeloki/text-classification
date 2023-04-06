@@ -168,6 +168,15 @@ class DatasetSplit:
         return self._labelc
 
     @property
+    def classes(self):
+        classes = set()
+        for lbs in self.labels:
+            if not self.is_multilabel:
+                lbs = [lbs]
+            classes.update(lbs)
+        return sorted(classes)
+
+    @property
     def n_classes(self):
         classes = set()
         for labels in self.labels:
@@ -194,12 +203,7 @@ class DatasetSplit:
             ohv = np.array([ (1, 0) if l == 0 else (0, 1) for l in ohv ])
         return ohv
 
-    def create_label_binarizer(self):
-        label_binarizer = MultiLabelBinarizer() if self.is_multilabel else LabelBinarizer()
-        label_binarizer.fit(self.labels)
-        return label_binarizer
-
-    def to_hf(self):
+    def to_hf(self, label_binarizer=None):
         ds = datasets.Dataset.from_pandas(self._data)
         ds = ds.add_column('__text__', self.texts)
         ds = ds.remove_columns([ col for col in ds.features.keys() if col not in ['__text__', self._idc, self._labelc] ])
@@ -208,7 +212,24 @@ class DatasetSplit:
             ds = ds.rename_column(self._idc, 'id')
         if self._labelc != 'labels':
             ds = ds.rename_column(self._labelc, 'labels')
+        # prepare labels
+        class_label = datasets.ClassLabel(names=self.classes)
+        if self.is_multilabel:
+            if label_binarizer is None:
+                # log warning!
+                label_binarizer = self.create_label_binarizer()
+            def one_hot_encode(batch):
+                batch['labels'] = label_binarizer.transform(batch['labels'])
+                return batch
+            ds = ds.map(one_hot_encode, batched=True)
+            class_label = datasets.Sequence(datasets.Value(dtype='float32'))
+        ds = ds.cast_column('labels', class_label)
         return ds
+
+    def create_label_binarizer(self):
+        label_binarizer = MultiLabelBinarizer() if self.is_multilabel else LabelBinarizer()
+        label_binarizer.fit(self.labels)
+        return label_binarizer
 
     def clean_texts(self):
         for col in self._textc:
