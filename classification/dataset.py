@@ -216,7 +216,7 @@ class DatasetSplit:
         class_label = datasets.ClassLabel(names=self.classes)
         if self.is_multilabel:
             if label_binarizer is None:
-                # log warning!
+                # @: log warning!
                 label_binarizer = self.create_label_binarizer()
             def one_hot_encode(batch):
                 batch['labels'] = label_binarizer.transform(batch['labels'])

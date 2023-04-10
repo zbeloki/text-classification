@@ -22,12 +22,12 @@ class Classifier(ABC):
     
     @classmethod
     @abstractmethod
-    def train(cls, train_split, dev_split=None, f_beta=1, top_k=False, *args, **kwargs):
+    def train(cls, train_split, dev_split=None, config=None):
         pass
 
     @classmethod
     @abstractmethod
-    def search_hyperparameters(cls, train_split, dev_split, n_trials, f_beta=1, top_k=False):
+    def search_hyperparameters(cls, train_split, dev_split, n_trials, f_beta=1, search_top_k=False, hp_space=None, **kwargs):
         pass
     
     @abstractmethod
@@ -56,14 +56,14 @@ class Classifier(ABC):
 
     def classify(self, texts, threshold=None, top_k=None):
         y_proba = self.predict_probabilities(texts)
-        is_multilabel = self.config.classification_type == 'multilabel'
+        is_multilabel = self.config.is_multilabel
         return ClassificationOutput(y_proba, is_multilabel, self._label_binarizer, threshold, top_k)
 
-    def evaluate(self, test_split, beta=1, threshold=None, top_k=None):
+    def evaluate(self, test_split, f_beta=1, threshold=None, top_k=None):
         X, y = test_split.X, test_split.y(self._label_binarizer)
         y_proba = self.predict_probabilities(X)
-        is_multilabel = self._config.classification_type == 'multilabel'
-        return EvaluationOutput(y, y_proba, is_multilabel, self._label_binarizer, beta, threshold, top_k)
+        is_multilabel = self.config.is_multilabel
+        return EvaluationOutput(y, y_proba, is_multilabel, self._label_binarizer, f_beta, threshold, top_k)
 
     def save(self, path):
         if not os.path.exists(path):

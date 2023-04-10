@@ -22,31 +22,59 @@ PIPELINE_KWARGS = {
     'device': get_device(),
 }
 
+class TransformerConfig(Config):
+
+    def __init__(self,
+                 model_id,
+                 model_max_length=None,
+                 num_train_epochs=None,
+                 seed=None,
+                 per_device_train_batch_size=None,
+                 eval_batch_size=None,
+                 gradient_accumulation_steps=None,
+                 learning_rate=None,
+                 weight_decay=None,
+                 is_multilabel=None,
+                 f_beta=1.0,
+                 optim_avg='weighted',
+                 top_k=None):
+        super().__init__(is_multilabel, f_beta, optim_avg, top_k)
+        self.model_id = model_id
+        self.model_max_length = model_max_length
+        self.num_train_epochs = num_train_epochs
+        self.seed = seed
+        self.per_device_train_batch_size = per_device_train_batch_size
+        self.eval_batch_size = eval_batch_size
+        self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+
+    @classmethod
+    def from_args(cls, args):
+        pass
+
+
 class TransformerClassifier(Classifier):
     
     def __init__(self, config, label_binarizer, model, tokenizer):
         super().__init__(config, label_binarizer)
-        self._pipe = pipeline('text-classification',
-                              model=model,
-                              tokenizer=tokenizer,
-                              **PIPELINE_KWARGS)
+        self._tokenizer = tokenizer
+        self._model = model
             
     @classmethod
-    def train(cls, train_split, dev_split=None, f_beta=1.0, top_k=None, model_id=None, *args, **kwargs):
-        params = {
-            'num_train_epochs': 1,
-            'seed': 2,
-            'per_device_train_batch_size': 16,
-        }
-        max_len = 512
-        grad_acc = 2
-        optim_metric = 'f'
+    def train(cls, train_split, dev_split=None, config=None):
+        # @: config default None? or force not None?
+        
+        config.type = 'Transformer'
+        if config.is_multilabel is None:
+            config.is_multilabel = train_split.is_multilabel
 
         label_binarizer = train_split.create_label_binarizer()
         train_hf = train_split.to_hf(label_binarizer)
         dev_hf = None if dev_split is None else dev_split.to_hf(label_binarizer)
 
-        tokenizer = AutoTokenizer.from_pretrained(model_id, model_max_length=max_len)
+        tokenizer_args = config.kwargs(['model_max_length'])
+        tokenizer = AutoTokenizer.from_pretrained(config.model_id, **tokenizer_args)
 
         def tokenize(examples):
             return tokenizer(examples['text'], padding='max_length', truncation=True, return_tensors='pt')
@@ -55,39 +83,40 @@ class TransformerClassifier(Classifier):
             dev_hf = dev_hf.map(tokenize, batched=True)
         
         def model_init():
-            model = AutoModelForSequenceClassification.from_pretrained(model_id, num_labels=train_split.n_classes)
-            if train_split.is_multilabel:
+            model = AutoModelForSequenceClassification.from_pretrained(config.model_id, num_labels=train_split.n_classes)
+            if config.is_multilabel:
                 model.config.problem_type = "multi_label_classification"
             return model
 
         def compute_metrics(eval_pred):
             logits, labels = eval_pred
             eval_output = cls._evaluate_logits(labels, logits, is_multilabel)
-            average = 'weighted'
             return {
-                'f': eval_output.f(average),
-                'precision': eval_output.precision(average),
-                'recall': eval_output.recall(average),
+                'f': eval_output.f(average=config.optim_avg),
+                'precision': eval_output.precision(average=config.optim_avg),
+                'recall': eval_output.recall(average=config.optim_avg),
             }
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             args = TrainingArguments(tmp_dir,
                                      save_strategy="epoch",
-                                     gradient_accumulation_steps=grad_acc,
                                      optim='adamw_torch',
-                                     **params)
+                                     **config.kwargs(['num_train_epochs',
+                                                      'seed',
+                                                      'per_device_train_batch_size',
+                                                      'gradient_accumulation_steps']))
 
             callbacks = []
             if dev_hf is not None:
                 # Keep best model
                 args.load_best_model_at_end = True
                 args.evaluation_strategy = 'epoch'
-                args.metric_for_best_model = optim_metric
+                args.metric_for_best_model = 'f'
                 args.save_total_limit = 1
                 # Early stopping
-                early_stop = EarlyStoppingCallback(early_stopping_patience=2,
-                                                   early_stopping_threshold=0.001)
-                callbacks.append(early_stop)
+                #early_stop = EarlyStoppingCallback(early_stopping_patience=2,
+                #                                   early_stopping_threshold=0.001)
+                #callbacks.append(early_stop)
         
             trainer = Trainer(model_init=model_init,
                               args=args,
@@ -97,11 +126,6 @@ class TransformerClassifier(Classifier):
                               callbacks=callbacks)
 
             trainer.train()
-
-        kwargs['top_k'] = top_k
-        if 'classification_type' not in kwargs:
-            kwargs['classification_type'] = 'multilabel' if train_split.is_multilabel else 'multiclass'
-        config = Config.from_dict(kwargs)
             
         return TransformerClassifier(config, label_binarizer, trainer.model, tokenizer)
 
@@ -125,12 +149,10 @@ class TransformerClassifier(Classifier):
     def predict_probabilities(self, texts):
         if type(texts) == np.ndarray:
             texts = texts.tolist()
-        tokenizer = self._pipe.tokenizer
-        model = self._pipe.model
         device = get_device()
-        tokens = tokenizer(texts, truncation=True, padding='longest', return_tensors='pt').to(device)
-        output = model(**tokens)
-        if self._config.classification_type == 'multilabel':
+        tokens = self._tokenizer(texts, truncation=True, padding='longest', return_tensors='pt').to(device)
+        output = self._model(**tokens)
+        if self._config.is_multilabel:
             probas = torch.sigmoid(output.logits)
         else:
             probas = torch.nn.functional.softmax(output.logits, dim=1)

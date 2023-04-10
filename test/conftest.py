@@ -1,5 +1,5 @@
 from classification.dataset import Dataset, DatasetSplit
-from classification.svm_classifier import SVMClassifier
+from classification.svm_classifier import SVMClassifier, SVMConfig
 from classification.classification_output import ClassificationOutput
 
 import pandas as pd
@@ -93,15 +93,15 @@ def small_ml():
 
 @pytest.fixture(scope='session')
 def imdb_svm(imdb):
-    return SVMClassifier.train(imdb['train'], min_df=1, max_df=1.0, loss='squared_hinge', c=1.0, max_iter=1000)
+    return SVMClassifier.train(imdb['train'], config=SVMConfig())
 
 @pytest.fixture(scope='session')
 def clothes_svm(clothes):
-    return SVMClassifier.train(clothes['train'], min_df=1, max_df=1.0, loss='squared_hinge', c=1.0, max_iter=1000)
+    return SVMClassifier.train(clothes['train'], config=SVMConfig())
 
 @pytest.fixture(scope='session')
 def toxic_svm(toxic):
-    return SVMClassifier.train(toxic['train'], min_df=1, max_df=1.0, loss='squared_hinge', c=1.0, max_iter=1000)
+    return SVMClassifier.train(toxic['train'], config=SVMConfig())
 
 # classification outputs
 

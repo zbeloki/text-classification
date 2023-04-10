@@ -11,12 +11,39 @@ from sklearn.exceptions import ConvergenceWarning
 import optuna
 import numpy as np
 
+from typing import Literal, Union
 import joblib
 import json
 import os
 import pdb
 import warnings
 
+class SVMConfig(Config):
+
+    def __init__(self,
+                 min_df=None,
+                 max_df=None,
+                 loss=None,
+                 C=None,
+                 max_iter=None,
+                 n_jobs=None,
+                 is_multilabel=None,
+                 f_beta=1.0,
+                 optim_avg='weighted',
+                 top_k=None):
+        super().__init__(is_multilabel, f_beta, optim_avg, top_k)
+        self.min_df = min_df
+        self.max_df = max_df
+        self.loss = loss
+        self.C = C
+        self.max_iter = max_iter
+        self.n_jobs = n_jobs
+
+    @classmethod
+    def from_args(cls, args):
+        pass
+
+    
 class SVMClassifier(Classifier):
 
     def __init__(self, config, label_binarizer, model):
@@ -24,47 +51,50 @@ class SVMClassifier(Classifier):
         self._model = model
 
     @classmethod
-    def train(cls, train_split, dev_split=None, f_beta=1, top_k=None, n_jobs=1, min_df=1, max_df=1.0, loss='squared_hinge', c=1.0, max_iter=1000, **kwargs):
-        classifier, metrics = cls._training_trial(train_split, dev_split, n_jobs, f_beta, min_df, max_df, loss, c, max_iter, top_k, **kwargs)
+    def train(cls, train_split, dev_split=None, config=None):
+        classifier, metrics = cls._training_trial(train_split, dev_split, config)
         print(f"Default hyperparameters: {metrics}")
         return classifier
 
     @classmethod
-    def search_hyperparameters(cls, train_split, dev_split, n_trials=10, f_beta=1, search_top_k=False, n_jobs=1, **kwargs):
-            
+    def search_hyperparameters(cls, train_split, dev_split, n_trials=10, f_beta=1, search_top_k=False, n_jobs=1, hp_space=None, **kwargs):
+
         def objective(trial):
-            min_df = trial.suggest_int("min_df", 1, 100, log=True)
-            max_df = trial.suggest_float("max_df", 0.25, 1.0)
-            loss = trial.suggest_categorical("loss", ['hinge', 'squared_hinge'])
-            c = trial.suggest_float("c", 0.25, 2.0)
-            max_iter = trial.suggest_int("max_iter", 500, 1500, log=True)
-            if search_top_k:
-                max_top_k = min(10, train_split.n_classes-1)
-                top_k = trial.suggest_int("top_k", 1, max_top_k) if search_top_k else None
+            if hp_space is not None:
+                config = hp_space()
             else:
-                top_k = trial.suggest_categorical('top_k', [None])                
-            _, metrics = cls._training_trial(train_split, dev_split, n_jobs, f_beta, min_df, max_df, loss, c, max_iter, top_k, **kwargs)
-            return metrics.f('weighted')
+                config = SVMConfig()
+                config.min_df = trial.suggest_int("min_df", 1, 100, log=True)
+                config.max_df = trial.suggest_float("max_df", 0.25, 1.0)
+                config.loss = trial.suggest_categorical("loss", ['hinge', 'squared_hinge'])
+                config.C = trial.suggest_float("C", 0.25, 2.0)
+                config.max_iter = trial.suggest_int("max_iter", 500, 1500, log=True)
+                if search_top_k:
+                    max_top_k = min(10, train_split.n_classes-1)
+                    config.top_k = trial.suggest_int("top_k", 1, max_top_k) if search_top_k else None
+            _, metrics = cls._training_trial(train_split, dev_split, config)
+            return metrics.f(average=config.optim_avg)
 
         warnings.filterwarnings(action='ignore', category=ConvergenceWarning)
         study = optuna.create_study(direction="maximize")
         # use 'catch' to ignore trials where min_df > max_df
         study.optimize(objective, n_trials=n_trials, catch=(ValueError))
-
-        return study.best_params
+        
+        return SVMConfig.from_dict(study.best_params)
 
     @classmethod
-    def _training_trial(cls, train_split, dev_split, n_jobs, f_beta, min_df, max_df, loss, c, max_iter, top_k, **kwargs):
-        
-        kwargs['top_k'] = top_k
-        if 'classification_type' not in kwargs:
-            kwargs['classification_type'] = 'multilabel' if train_split.is_multilabel else 'multiclass'
-        config = Config.from_dict(kwargs)
+    def _training_trial(cls, train_split, dev_split, config):
 
-        tfidf_vectorizer = TfidfVectorizer(min_df=min_df, max_df=max_df)
-        estimator = LinearSVC(loss=loss, max_iter=max_iter, C=c)
+        if config is None:
+            config = SVMConfig()
+        config.type = 'SVM'
+        if config.is_multilabel is None:
+            config.is_multilabel = train_split.is_multilabel
+
+        tfidf_vectorizer = TfidfVectorizer(**config.kwargs(['min_df', 'max_df']))
+        estimator = LinearSVC(**config.kwargs(['loss', 'max_iter', 'C']))
         estimator = CalibratedClassifierCV(estimator)
-        estimator = OneVsRestClassifier(estimator, n_jobs=n_jobs)
+        estimator = OneVsRestClassifier(estimator, **config.kwargs(['n_jobs']))
 
         pipe = Pipeline([
             ('tfidf', tfidf_vectorizer),
@@ -83,7 +113,7 @@ class SVMClassifier(Classifier):
         if dev_split is None:
             dev_split = train_split
         classifier = SVMClassifier(config, label_binarizer, pipe)
-        metrics = classifier.evaluate(dev_split, f_beta, top_k)
+        metrics = classifier.evaluate(dev_split, **config.kwargs(['f_beta', 'top_k']))
 
         return classifier, metrics
 
@@ -102,3 +132,5 @@ class SVMClassifier(Classifier):
         super().save(path)
         fpath = os.path.join(path, "svm.joblib")
         joblib.dump(self._model, fpath)
+
+
