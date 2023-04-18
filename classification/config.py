@@ -3,6 +3,7 @@ import os
 import pdb
 
 class Config:
+    fname = 'classifier_config.json'
 
     def __init__(self,
                  is_multilabel=None,
@@ -41,13 +42,13 @@ class Config:
 
     @classmethod
     def load(cls, path):
-        fpath = os.path.join(path, 'config.json')
+        fpath = os.path.join(path, cls.fname)
         with open(fpath, 'r') as f:
             config_dict = json.load(f)
         return cls.from_dict(config_dict)
     
     def save(self, path):
-        fpath = os.path.join(path, 'config.json')
+        fpath = os.path.join(path, self.fname)
         with open(fpath, 'w') as f:
             json.dump(self.__dict__, f, indent=4)
 

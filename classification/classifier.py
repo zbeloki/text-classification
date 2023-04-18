@@ -7,12 +7,14 @@ import numpy as np
 
 from abc import ABC, abstractmethod
 import logging
+import joblib
 import os
 import json
 import pdb
 
 
 class Classifier(ABC):
+    label_binarizer_fname = 'label_binarizer.joblib'
     
     def __init__(self, config, label_binarizer):
         self._config = config
@@ -69,17 +71,17 @@ class Classifier(ABC):
         if not os.path.exists(path):
             os.makedirs(path)
         self._config.save(path)
-        # save: self._label_binarizer
+        joblib.dump(self._label_binarizer, os.path.join(path, self.label_binarizer_fname))
 
     @property
     def config(self):
         return self._config
 
-    def _load(self, path):
-        return {
-            'config': Config.load(path),
-            # 'label_binarizer': ...,
-        }
+    @classmethod
+    def _load(cls, path):
+        config = Config.load(path)
+        label_binarizer = joblib.load(os.path.join(path, cls.label_binarizer_fname))
+        return config, label_binarizer
 
     @classmethod
     def _evaluate_logits(cls, y_true, logits, is_multilabel, beta=1.0, top_k=None):

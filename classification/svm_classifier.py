@@ -45,7 +45,8 @@ class SVMConfig(Config):
 
     
 class SVMClassifier(Classifier):
-
+    model_fname = 'svm.joblib'
+    
     def __init__(self, config, label_binarizer, model):
         super().__init__(config, label_binarizer)
         self._model = model
@@ -123,14 +124,12 @@ class SVMClassifier(Classifier):
 
     @classmethod
     def load(cls, path):
-        kwargs = cls._load(path)
-        fname = "svm.joblib"
-        model = joblib.load(os.path.join(path, fname))
-        return SVMClassifier(model=model, **kwargs)
+        config, label_binarizer = cls._load(path)
+        model = joblib.load(os.path.join(path, cls.model_fname))
+        return SVMClassifier(config, label_binarizer, model)
     
     def save(self, path):
         super().save(path)
-        fpath = os.path.join(path, "svm.joblib")
-        joblib.dump(self._model, fpath)
+        joblib.dump(self._model, os.path.join(path, self.model_fname))
 
 

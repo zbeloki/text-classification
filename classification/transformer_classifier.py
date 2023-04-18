@@ -17,11 +17,6 @@ def get_device():
     else:
         return 'cpu'
 
-PIPELINE_KWARGS = {
-    'top_k': None,
-    'device': get_device(),
-}
-
 class TransformerConfig(Config):
 
     def __init__(self,
@@ -60,6 +55,7 @@ class TransformerClassifier(Classifier):
         super().__init__(config, label_binarizer)
         self._tokenizer = tokenizer
         self._model = model
+        self._model.eval()
             
     @classmethod
     def train(cls, train_split, dev_split=None, config=None):
@@ -84,6 +80,7 @@ class TransformerClassifier(Classifier):
         
         def model_init():
             model = AutoModelForSequenceClassification.from_pretrained(config.model_id, num_labels=train_split.n_classes)
+            model = model.to(get_device())
             if config.is_multilabel:
                 model.config.problem_type = "multi_label_classification"
             return model
@@ -149,8 +146,7 @@ class TransformerClassifier(Classifier):
     def predict_probabilities(self, texts):
         if type(texts) == np.ndarray:
             texts = texts.tolist()
-        device = get_device()
-        tokens = self._tokenizer(texts, truncation=True, padding='longest', return_tensors='pt').to(device)
+        tokens = self._tokenizer(texts, truncation=True, padding='longest', return_tensors='pt').to(get_device())
         output = self._model(**tokens)
         if self._config.is_multilabel:
             probas = torch.sigmoid(output.logits)
@@ -160,8 +156,13 @@ class TransformerClassifier(Classifier):
 
     @classmethod
     def load(cls, path):
-        model = pipeline('text-classification', model=path, **PIPELINE_KWARGS)
-        return TransformerClassifier(model, is_multilabel)
-
-    def save(self, path):        
+        config, label_binarizer = cls._load(path)
+        model = AutoModelForSequenceClassification.from_pretrained(path)
+        model = model.to(get_device())
+        tokenizer = AutoTokenizer.from_pretrained(path)
+        return TransformerClassifier(config, label_binarizer, model, tokenizer)
+    
+    def save(self, path):
+        super().save(path)
         self._model.save_pretrained(path)
+        self._tokenizer.save_pretrained(path)

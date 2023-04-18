@@ -1,12 +1,12 @@
 from classification.svm_classifier import SVMClassifier, SVMConfig
 
 import pytest
+import tempfile
 import pdb
 
 class TestSVMClassifier:
 
-    def test_train_binary(self, imdb):
-        
+    def test_train_binary(self, imdb):        
         classifier = SVMClassifier.train(imdb['train'])
         assert 0.99 <= classifier.evaluate(imdb['train']).f('micro') <= 1.00
         assert 0.90 <= classifier.evaluate(imdb['dev']).f('micro') <= 0.91
@@ -79,3 +79,10 @@ class TestSVMClassifier:
         config = SVMClassifier.search_hyperparameters(toxic['train'], toxic['dev'], n_trials=1, search_top_k=True)
         assert 1 <= config.top_k < 6
         classifier = SVMClassifier.train(toxic['train'], config=config)
+
+    def test_save_load(self, imdb, imdb_svm):
+        with tempfile.TemporaryDirectory() as path:
+            imdb_svm.save(path)
+            imdb_svm_ = SVMClassifier.load(path)
+        expected_f = imdb_svm.evaluate(imdb['test']).f('micro')
+        assert imdb_svm_.evaluate(imdb['test']).f('micro') == expected_f
